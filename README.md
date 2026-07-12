@@ -6,20 +6,24 @@ A retrieval-augmented generation (RAG) system that answers legal questions groun
 
 ## 1. Problem Statement
 
-Legal research in Bangladesh is largely manual: lawyers and researchers search through thousands of judgements and hundreds of acts to find relevant precedent, then manually check that a citation actually supports the point being argued.
+In Bangladesh, real people's cases — a family fighting over inherited land, a worker unfairly dismissed, someone wrongly accused — often hinge on whether their lawyer can find the *right* precedent in time. That precedent is buried across tens of thousands of judgements and hundreds of statutes, with no searchable, unified way to check it. Junior lawyers and law students spend days on research that a senior lawyer's intuition would shortcut in minutes — and even then, a missed or misapplied precedent can mean a client loses a case they should have won.
 
-A naive "chatbot on top of case law" is unsafe for this domain — a generic LLM will:
-- **Hallucinate citations** — cite an act, section, or case number that doesn't exist, or exists but doesn't say what the model claims.
-- **Answer confidently on weak retrieval** — give a definite answer even when nothing relevant was actually found.
-- **Ignore precedent hierarchy** — treat a High Court Division observation the same as a binding Appellate Division ruling.
-- **Ignore conflicting precedent** — different cases on the same subject with opposite outcomes, presented as if there's one clean answer.
-- **Guess at outcome predictions from an underspecified situation** instead of asking for the missing facts first.
+Handing this job to a generic AI chatbot makes the problem worse, not better — because a fluent, confident answer is more dangerous than no answer at all when:
+- It **invents a citation** that doesn't exist, or misquotes a real one — and a lawyer repeats it in a filing without realizing.
+- It **answers confidently on thin evidence**, when the honest answer is "not enough precedent was found."
+- It **treats a lower court's passing remark as equal to a binding Supreme Court ruling**, misleading someone about how strong their legal ground actually is.
+- It **hides the fact that precedent is split** on an issue, when knowing that split is often the most important thing a researcher needs to know.
+- It **guesses at how a case will turn out** from a vague description instead of asking what's actually missing — turning a research tool into a source of false confidence.
 
-This project's goal was a system where every answer is traceable to real source text, where the model's own outputs are checked before being shown to the user, and where the system knows when it doesn't have enough to answer.
+The real cost of these failure modes isn't a bad demo — it's a wrong legal opinion someone acts on.
+
+## 2. The Solution
+
+This project builds a legal research assistant that treats *trustworthiness* as the primary design constraint, not an afterthought bolted on at the end. Every answer is traceable to a real judgement or statute section; every citation the model generates is checked against the actual retrieved text before it reaches the user; the system explicitly measures whether it found enough to answer at all, and says so when it hasn't; and when precedent genuinely conflicts, that conflict is surfaced instead of papered over. In short: it's built to know the difference between "I found a clear answer" and "I'm guessing" — and to never present the second as the first.
 
 ---
 
-## 2. Data
+## 3. Data
 
 | Source | What | Count | Scraper |
 |---|---|---|---|
@@ -30,7 +34,7 @@ This project's goal was a system where every answer is traceable to real source 
 
 ---
 
-## 3. Preprocessing & Indexing
+## 4. Preprocessing & Indexing
 
 - **Metadata extraction** (`enrich_judgements.py`) — fully rule-based (regex), no LLM calls needed, so it's fast and free to re-run: extracts year, division (AD/HCD), case type (writ petition, criminal appeal, civil revision, etc.), outcome (rule absolute/discharged, dismissed, allowed, disposed — read from filename first, then the last 800 characters of the judgement text), judges, and subject-matter keywords (land dispute, criminal, contract, family, writ, service, tax, tenancy, company, cheque dishonour).
 - **Chunking** — 600 words per chunk with an 80-word overlap, tuned down from an earlier, larger chunk size for better retrieval precision.
@@ -39,9 +43,9 @@ This project's goal was a system where every answer is traceable to real source 
 
 ---
 
-## 4. Architecture — v3 LangGraph Pipeline
+## 5. Architecture — LangGraph Pipeline
 
-v3 replaced a single-function chat handler with an explicit **7-node LangGraph state machine** with conditional routing:
+**7-node LangGraph state machine** with conditional routing:
 
 ```
 User Query
@@ -73,24 +77,9 @@ finalize            → structured JSON response
 ```
 
 **Node list (from the actual `StateGraph`):** `understanding → clarify → retrieval → sufficiency_check → generation → citation_verifier → finalize`
-
-### What changed from v2 → v3
-
-| Feature | v2 | v3 |
-|---|---|---|
-| Orchestration | Single `chat()` function | LangGraph, 7 nodes, conditional routing |
-| LLM | Claude (preferred) + Groq fallback | **Gemini (preferred) + Groq fallback** — Anthropic dropped |
-| Retrieval | Vector-only (ChromaDB) | **Hybrid** — vector + BM25, merged with Reciprocal Rank Fusion |
-| Case ranking | Raw cosine similarity | **Precedent-weighted** — AD > HCD, plus a recency bonus |
-| Retrieval failure | Silently passed weak context to the LLM | **Sufficiency check** — auto-retries with a broader query (max 2x) |
-| Hallucinated citation | No way to catch it | **Citation verifier node** — checks cited act/section/case number against retrieved context; retries generation if invalid |
-| Conflicting precedent | Ignored | **Contradiction detection** — flags when the same subject area has cases with opposing outcomes, surfaces it into the prompt |
-| Outcome prediction on vague facts | Answered anyway | **Clarification gate** — asks follow-up questions before predicting |
-| Intent classification | Hardcoded keyword match | LLM-based (keyword match kept as fallback) |
-
 ---
 
-## 5. Why This Approach
+## 6. Why This Approach
 
 | Design choice | Reasoning |
 |---|---|
@@ -106,7 +95,7 @@ finalize            → structured JSON response
 
 ---
 
-## 6. Tech Stack
+## 7. Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -120,7 +109,7 @@ finalize            → structured JSON response
 
 ---
 
-## 7. API Endpoints
+## 8. API Endpoints
 
 - **`POST /api/chat`** — main Q&A endpoint. Accepts `question`, `history`, and optional `filters` (e.g. `year_from`, `case_type`). Response includes `intent`, `outcome_stats`, `contradictions_detected`, `citation_verified`, and `retrieval_attempts` alongside the answer and sources.
 - **`POST /api/predict`** — outcome prediction, gated by the clarification step; returns `follow_up_questions` instead of a guess when the situation is underspecified.
@@ -129,9 +118,11 @@ finalize            → structured JSON response
 
 ---
 
-## 8. Known Limitations / Future Work
+## 9. Known Limitations / Future Work
 
 - **Statute currency** — repealed/amended sections aren't tracked yet; amendment metadata would need to be added from bdlaws during the laws-indexing step.
 - **Sufficiency threshold** (`SUFFICIENCY_THRESHOLD = 0.01`) is a starting value, not yet empirically tuned against real query logs.
 - **Dual-model self-consistency** — running both Gemini and Groq on the same query and flagging disagreement is designed but not yet implemented.
 - **Few-shot exemplars** — the generation prompt doesn't yet include verified real-case examples, which would likely improve grounding further.
+
+---
