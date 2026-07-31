@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(venv/Scripts/python.exe -c ' *)",
-      "Bash(curl -m 60 -s -X POST http://localhost:8000/api/chat -H \"Content-Type: application/json\" -d '{\"question\": \"Section 302 Penal Code te ki bole?\", \"history\": [], \"filters\": null}')"
-    ]
-  }
-}

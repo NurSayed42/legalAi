@@ -31,5 +31,5 @@ logs/
 .vscode/
 *.swp
 
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code settings
+.claude/
