@@ -37,7 +37,7 @@ This project builds a legal research assistant that treats *trustworthiness* as 
 ## 4. Preprocessing & Indexing
 
 - **Metadata extraction** (`enrich_judgements.py`) — fully rule-based (regex), no LLM calls needed, so it's fast and free to re-run: extracts year, division (AD/HCD), case type (writ petition, criminal appeal, civil revision, etc.), outcome (rule absolute/discharged, dismissed, allowed, disposed — read from filename first, then the last 800 characters of the judgement text), judges, and subject-matter keywords (land dispute, criminal, contract, family, writ, service, tax, tenancy, company, cheque dishonour).
-- **Chunking** — 600 words per chunk with an 80-word overlap, tuned down from an earlier, larger chunk size for better retrieval precision.
+- **Chunking** — judgements are split 600 words per chunk with an 80-word overlap (tuned down from an earlier, larger chunk size for better retrieval precision). Laws use section-level granularity instead — each Act section is stored as its own document, since sections are already a natural, citation-sized unit and don't need further splitting.
 - **Embedding model** — `paraphrase-multilingual-MiniLM-L12-v2` (via `sentence-transformers`, called through ChromaDB's `SentenceTransformerEmbeddingFunction`). Chosen specifically because queries and judgement text mix Bangla and English, and this model handles both without needing separate pipelines.
 - **Vector store** — ChromaDB (persistent, cosine similarity), two collections: `bangladesh_judgements` and `bangladesh_laws`.
 
@@ -112,8 +112,9 @@ finalize            → structured JSON response
 ## 8. API Endpoints
 
 - **`POST /api/chat`** — main Q&A endpoint. Accepts `question`, `history`, and optional `filters` (e.g. `year_from`, `case_type`). Response includes `intent`, `outcome_stats`, `contradictions_detected`, `citation_verified`, and `retrieval_attempts` alongside the answer and sources.
-- **`POST /api/predict`** — outcome prediction, gated by the clarification step; returns `follow_up_questions` instead of a guess when the situation is underspecified.
+- **`POST /api/predict`** — outcome prediction, gated by the clarification step; returns `follow_up_options` (clickable multiple-choice questions, or open-ended `follow_up_questions` as a fallback) instead of a guess when the situation is underspecified.
 - **`POST /api/search`** — hybrid search (vector + BM25) without full answer generation.
+- **`POST /api/generate-doc`** — drafts a legal document (NDA, sale deed, rent agreement, affidavit, writ petition, plaint, etc.) grounded in retrieved relevant law sections.
 - **`GET /api/filter-options`**, **`GET /api/stats`** — metadata/browsing endpoints.
 
 ---
