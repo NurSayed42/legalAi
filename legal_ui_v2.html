@@ -1,0 +1,1839 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>আইন সহায়তা — Bangladesh Legal AI</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=IBM+Plex+Mono:wght@300;400;500;600&family=Noto+Serif+Bengali:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #080a0e;
+  --surface:   #0f1117;
+  --surface2:  #161920;
+  --surface3:  #1d2029;
+  --border:    #252830;
+  --border2:   #2f3340;
+  --gold:      #c8a84b;
+  --gold-dim:  #7a6428;
+  --gold-glow: rgba(200,168,75,0.12);
+  --text:      #e4e2db;
+  --text-dim:  #7a7870;
+  --text-mid:  #b0ada5;
+  --green:     #4caf82;
+  --green-bg:  rgba(76,175,130,0.1);
+  --red:       #c94c4c;
+  --red-bg:    rgba(201,76,76,0.1);
+  --blue:      #5b9bd5;
+  --blue-bg:   rgba(91,155,213,0.1);
+  --amber:     #e8a020;
+  --amber-bg:  rgba(232,160,32,0.1);
+  --ease:      cubic-bezier(0.4, 0, 0.2, 1);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.35);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.35);
+  --shadow-gold: 0 4px 20px rgba(200,168,75,0.18);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(200,168,75,0.05), transparent),
+    var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+::selection { background: var(--gold-glow); color: var(--gold); }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold-dim); }
+
+/* ── LAYOUT ── */
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ── HEADER ── */
+.header {
+  background: rgba(15,17,23,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 58px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+}
+
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo-badge {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  box-shadow: var(--shadow-gold);
+  transition: transform 0.25s var(--ease);
+}
+.logo:hover .logo-badge { transform: rotate(-6deg) scale(1.05); }
+.logo-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.1rem; font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+.logo-tagline {
+  font-size: 0.58rem;
+  color: var(--gold);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+.header-right { display: flex; align-items: center; gap: 0.6rem; }
+
+.stat-pill {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 0.68rem; color: var(--text-dim);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 12px;
+  transition: border-color 0.2s var(--ease);
+}
+.stat-pill:hover { border-color: var(--border2); }
+.stat-pill strong { color: var(--gold); font-weight: 600; }
+
+.status-dot {
+  width: 6px; height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── TABS ── */
+.tabs {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  padding: 0 1.5rem;
+  flex-shrink: 0;
+}
+.tab {
+  background: none; border: none;
+  color: var(--text-dim);
+  padding: 0 1.2rem;
+  height: 44px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.73rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  display: flex; align-items: center; gap: 7px;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s var(--ease), background 0.2s var(--ease), border-color 0.2s var(--ease);
+  white-space: nowrap;
+  border-radius: 6px 6px 0 0;
+}
+.tab:hover { color: var(--text-mid); background: rgba(255,255,255,0.02); }
+.tab.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  background: var(--gold-glow);
+}
+
+/* ── MAIN ── */
+.main {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ═══════════════════════════════
+   CHAT TAB
+═══════════════════════════════ */
+.chat-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+/* welcome screen */
+.welcome {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; text-align: center;
+  padding: 3rem 2rem; flex: 1; gap: 1rem;
+}
+.welcome-icon {
+  font-size: 2.5rem;
+  filter: drop-shadow(0 0 20px var(--gold-glow));
+  margin-bottom: 0.5rem;
+  animation: float 3.5s ease-in-out infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.welcome h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.6rem; font-weight: 700;
+  color: var(--text); margin-bottom: 0.3rem;
+}
+.welcome-sub { font-size: 0.78rem; color: var(--text-dim); line-height: 1.7; }
+
+.suggestions {
+  display: flex; flex-wrap: wrap;
+  gap: 0.5rem; justify-content: center;
+  margin-top: 0.5rem;
+}
+.suggestion {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text-dim);
+  padding: 0.45rem 0.9rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  transition: all 0.2s var(--ease);
+}
+.suggestion:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-glow); transform: translateY(-1px); }
+.suggestion.selected { border-color: var(--gold); color: #000; background: var(--gold); font-weight: 600; }
+.suggestion.selected:hover { background: var(--gold); color: #000; }
+
+/* messages */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.msg { display: flex; gap: 0.8rem; align-items: flex-start; animation: fadeInUp 0.35s var(--ease); }
+.msg.user { flex-direction: row-reverse; }
+
+.avatar {
+  width: 32px; height: 32px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.avatar.ai { background: linear-gradient(135deg, var(--gold), var(--gold-dim)); color: #000; box-shadow: var(--shadow-gold); }
+.avatar.user { background: var(--surface3); }
+
+.bubble {
+  max-width: 72%;
+  padding: 0.9rem 1.1rem;
+  border-radius: 14px;
+  font-size: 0.82rem;
+  line-height: 1.85;
+  box-shadow: var(--shadow-sm);
+}
+.bubble.ai {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 2px 14px 14px 14px;
+}
+.bubble.user {
+  background: var(--gold-dim);
+  border-radius: 14px 2px 14px 14px;
+  color: var(--text);
+}
+
+/* structured answer cards inside bubble */
+.answer-summary {
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1.8;
+  margin-bottom: 0.8rem;
+  white-space: pre-wrap;
+}
+
+.answer-section {
+  margin-top: 0.8rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.8rem;
+}
+.answer-section-title {
+  font-size: 0.65rem;
+  color: var(--gold);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.law-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--blue);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.75rem;
+  box-shadow: var(--shadow-sm);
+  transition: border-left-color 0.2s var(--ease);
+}
+.law-card:hover { border-left-color: var(--gold); }
+.law-card-title { color: var(--blue); font-weight: 600; margin-bottom: 2px; }
+.law-card-text { color: var(--text-dim); line-height: 1.6; }
+.law-card-link { color: var(--text-dim); font-size: 0.65rem; margin-top: 3px; display: block; }
+.law-card-link a { color: var(--gold-dim); text-decoration: none; }
+.law-card-link a:hover { color: var(--gold); }
+
+.case-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: 2px;
+  font-size: 0.68rem;
+}
+.outcome-badge {
+  font-size: 0.6rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-red { background: var(--red-bg); color: var(--red); }
+.badge-amber { background: var(--amber-bg); color: var(--amber); }
+.badge-gray { background: var(--surface3); color: var(--text-dim); }
+
+/* prediction card */
+.prediction-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+  padding: 0.8rem;
+  margin-top: 0.4rem;
+  box-shadow: var(--shadow-sm);
+}
+.win-rate-bar {
+  height: 6px;
+  background: var(--surface3);
+  border-radius: 3px;
+  margin: 0.4rem 0;
+  overflow: hidden;
+}
+.win-rate-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--red), var(--amber), var(--green));
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+/* outcome stats row */
+.stats-row {
+  display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.4rem;
+}
+.stat-box {
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  text-align: center; flex: 1; min-width: 80px;
+  transition: transform 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.stat-box:hover { transform: translateY(-2px); border-color: var(--border2); }
+.stat-box-num { font-size: 1rem; font-weight: 600; color: var(--gold); }
+.stat-box-label { font-size: 0.6rem; color: var(--text-dim); margin-top: 1px; }
+
+.disclaimer {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  margin-top: 0.8rem;
+  padding-top: 0.6rem;
+  font-style: italic;
+}
+
+/* intent badge */
+.intent-tag {
+  display: inline-flex; align-items: center;
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin-bottom: 0.5rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* loading dots */
+.loading-dots {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--text-dim); font-size: 0.78rem;
+}
+.dot { width: 5px; height: 5px; background: var(--gold); border-radius: 50%; animation: blink 1.2s infinite; opacity: 0; }
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes blink { 0%,100%{opacity:0} 50%{opacity:1} }
+
+/* input area */
+.input-area {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  display: flex; flex-direction: column; gap: 0.6rem;
+}
+.filter-row {
+  display: flex; gap: 0.5rem; flex-wrap: wrap;
+}
+.filter-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+.filter-select:hover { border-color: var(--border2); }
+.filter-select:focus { border-color: var(--gold); color: var(--text); box-shadow: 0 0 0 3px var(--gold-glow); }
+.filter-label { font-size: 0.62rem; color: var(--text-dim); display: flex; align-items: center; }
+
+.input-row { display: flex; gap: 0.6rem; }
+.chat-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  padding: 0.8rem 1rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.82rem;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+  resize: none;
+  height: 46px;
+}
+.chat-input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-glow); }
+.chat-input::placeholder { color: var(--text-dim); }
+
+.send-btn {
+  background: var(--gold);
+  color: #000;
+  border: none;
+  padding: 0 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  transition: transform 0.15s var(--ease), box-shadow 0.2s var(--ease), opacity 0.15s var(--ease);
+  white-space: nowrap;
+}
+.send-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow-gold); }
+.send-btn:active:not(:disabled) { transform: translateY(0) scale(0.97); }
+.send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.clear-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 0 0.8rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  transition: all 0.2s var(--ease);
+}
+.clear-btn:hover { border-color: var(--red); color: var(--red); }
+
+/* ═══════════════════════════════
+   PREDICT TAB
+═══════════════════════════════ */
+.panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.panel-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.2rem;
+  box-shadow: var(--shadow-sm);
+}
+.panel-card-title {
+  font-size: 0.75rem;
+  color: var(--text-mid);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 0.8rem;
+  display: flex; align-items: center; gap: 6px;
+}
+
+.big-textarea {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  padding: 0.9rem 1rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.82rem;
+  border-radius: 8px;
+  outline: none;
+  resize: vertical;
+  min-height: 110px;
+  line-height: 1.75;
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+.big-textarea:focus { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-glow); }
+.big-textarea::placeholder { color: var(--text-dim); }
+
+.primary-btn {
+  background: var(--gold);
+  color: #000;
+  border: none;
+  padding: 0.75rem 1.8rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  transition: transform 0.15s var(--ease), box-shadow 0.2s var(--ease), opacity 0.15s var(--ease);
+  align-self: flex-start;
+}
+.primary-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow-gold); }
+.primary-btn:active:not(:disabled) { transform: translateY(0) scale(0.97); }
+.primary-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.select-group { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.select-chip {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text-dim);
+  padding: 0.35rem 0.8rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  transition: all 0.2s var(--ease);
+}
+.select-chip:hover, .select-chip.active {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: var(--gold-glow);
+  transform: translateY(-1px);
+}
+
+.result-block {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  box-shadow: var(--shadow-sm);
+}
+.result-block h3 {
+  font-size: 0.72rem;
+  color: var(--gold);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 0.6rem;
+}
+.result-text { font-size: 0.8rem; color: var(--text-mid); line-height: 1.8; }
+
+.factor-list { display: flex; flex-direction: column; gap: 0.3rem; }
+.factor {
+  display: flex; align-items: flex-start; gap: 7px;
+  font-size: 0.76rem; color: var(--text-mid); line-height: 1.6;
+}
+.factor-icon { flex-shrink: 0; font-size: 0.75rem; margin-top: 2px; }
+
+/* ═══════════════════════════════
+   SEARCH TAB
+═══════════════════════════════ */
+.search-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.search-bar-row {
+  display: flex; gap: 0.6rem;
+}
+.search-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  padding: 0.8rem 1rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.82rem;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+.search-input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-glow); }
+.search-input::placeholder { color: var(--text-dim); }
+
+.filter-bar {
+  display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;
+}
+.filter-bar-label { font-size: 0.65rem; color: var(--text-dim); }
+
+.search-type-toggle { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.toggle-btn {
+  background: none; border: none;
+  color: var(--text-dim);
+  padding: 4px 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+  border-right: 1px solid var(--border);
+}
+.toggle-btn:last-child { border-right: none; }
+.toggle-btn.active { background: var(--gold); color: #000; font-weight: 600; }
+
+.results-grid { display: flex; flex-direction: column; gap: 0.7rem; }
+
+.result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+.result-card:hover { border-color: var(--gold-dim); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+.result-card-header {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+.result-card-title { font-size: 0.78rem; color: var(--gold); font-weight: 600; }
+.result-card-meta {
+  display: flex; gap: 0.4rem; flex-wrap: wrap; flex-shrink: 0;
+}
+.meta-tag {
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-dim);
+}
+.result-card-preview {
+  font-size: 0.75rem; color: var(--text-dim); line-height: 1.7;
+}
+.result-card-score {
+  font-size: 0.62rem; color: var(--text-dim);
+  margin-top: 0.4rem;
+}
+.score-fill { color: var(--green); }
+
+/* law result card */
+.law-result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--blue);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+  box-shadow: var(--shadow-sm);
+}
+.law-result-card:hover { border-color: var(--blue); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+.empty-state {
+  text-align: center; padding: 3rem; color: var(--text-dim); font-size: 0.78rem;
+}
+
+/* ═══════════════════════════════
+   DOCS TAB
+═══════════════════════════════ */
+.docs-panel {
+  flex: 1; overflow-y: auto;
+  padding: 1.5rem;
+  display: flex; flex-direction: column; gap: 1.2rem;
+}
+
+.doc-types-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+.doc-type-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s var(--ease);
+  font-family: 'IBM Plex Mono', monospace;
+}
+.doc-type-card:hover, .doc-type-card.selected {
+  border-color: var(--gold);
+  background: var(--gold-glow);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-gold);
+}
+.doc-icon { font-size: 1.6rem; display: block; margin-bottom: 0.5rem; }
+.doc-name { font-size: 0.7rem; color: var(--text); font-weight: 600; }
+.doc-name-bn { font-size: 0.65rem; color: var(--text-dim); margin-top: 2px; }
+
+.doc-output-area {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gold);
+  border-radius: 8px;
+  padding: 1.4rem;
+  font-size: 0.78rem;
+  line-height: 1.95;
+  white-space: pre-wrap;
+  color: var(--text-mid);
+  max-height: 500px;
+  overflow-y: auto;
+  box-shadow: var(--shadow-sm);
+}
+
+.copy-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  transition: all 0.2s var(--ease);
+  align-self: flex-end;
+}
+.copy-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+/* ── GENERIC ── */
+.section-label {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+.divider { border: none; border-top: 1px solid var(--border); }
+.text-gold { color: var(--gold); }
+.text-dim { color: var(--text-dim); }
+.text-green { color: var(--green); }
+.text-red { color: var(--red); }
+.text-amber { color: var(--amber); }
+.text-blue { color: var(--blue); }
+
+.spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback } = React;
+const API = "http://localhost:8000";
+
+// ─── HELPERS ──────────────────────────────────────────────
+function outcomeColor(o) {
+  if (!o) return 'badge-gray';
+  if (o === 'rule_absolute' || o === 'allowed') return 'badge-green';
+  if (o === 'rule_discharged' || o === 'dismissed') return 'badge-red';
+  if (o === 'disposed') return 'badge-amber';
+  return 'badge-gray';
+}
+function outcomeLabel(o) {
+  const m = {
+    rule_absolute: 'Absolute ✓', rule_discharged: 'Discharged ✗',
+    allowed: 'Allowed ✓', dismissed: 'Dismissed ✗',
+    disposed: 'Disposed', unknown: '?'
+  };
+  return m[o] || o;
+}
+function scoreBar(s) {
+  const pct = Math.round(s * 100);
+  const filled = Math.round(pct / 10);
+  return '█'.repeat(filled) + '░'.repeat(10 - filled) + ` ${pct}%`;
+}
+function copyText(t) {
+  navigator.clipboard.writeText(t).catch(() => {});
+}
+
+// ─── STRUCTURED ANSWER RENDERER ──────────────────────────
+function AnswerCard({ data, intent, outcomeStats, onQuickReply }) {
+  const [selectedAnswers, setSelectedAnswers] = useState({});
+
+  if (!data) return null;
+
+  // Raw JSON string এলে parse করার চেষ্টা করো
+  if (typeof data === 'string') {
+    try {
+      data = JSON.parse(data.replace(/```json|```/g, '').trim());
+    } catch {
+      return <div className="answer-summary" style={{whiteSpace:'pre-wrap'}}>{data}</div>;
+    }
+  }
+
+  const winPct = outcomeStats?.win_rate_pct ?? null;
+
+  return (
+    <div>
+      {/* INTENT TAG */}
+      {intent && (
+        <div className="intent-tag">
+          {intent === 'law_lookup'  && '📜 LAW LOOKUP'}
+          {intent === 'case_search' && '⚖️ CASE SEARCH'}
+          {intent === 'prediction'  && '🔮 OUTCOME PREDICTION'}
+          {intent === 'general'     && '💬 GENERAL QUERY'}
+        </div>
+      )}
+
+      {/* SUMMARY */}
+      {data.summary && (
+        <div className="answer-summary">{data.summary}</div>
+      )}
+
+      {/* IRAC ANALYSIS */}
+      {data.irac_analysis && (
+        <div className="answer-section">
+          <div className="answer-section-title">আইনি বিশ্লেষণ</div>
+          {[
+            { key: 'issue',           label: 'সমস্যা',     color: 'var(--amber)' },
+            { key: 'applicable_rule', label: 'প্রযোজ্য আইন', color: 'var(--blue)' },
+            { key: 'application',     label: 'প্রয়োগ',     color: 'var(--text-mid)' },
+            { key: 'conclusion',      label: 'সিদ্ধান্ত',  color: 'var(--green)' },
+          ].map(({key, label, color}) => data.irac_analysis[key] && (
+            <div key={key} style={{
+              background: 'var(--bg)', border: '1px solid var(--border)',
+              borderLeft: `3px solid ${color}`, borderRadius: '4px',
+              padding: '0.6rem 0.8rem', marginBottom: '0.4rem',
+            }}>
+              <div style={{fontSize:'0.62rem', color, marginBottom:'3px', letterSpacing:'1px', textTransform:'uppercase'}}>{label}</div>
+              <div style={{fontSize:'0.76rem', color:'var(--text-mid)', lineHeight:1.7}}>{data.irac_analysis[key]}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ACTION CHECKLIST */}
+      {data.action_checklist?.length > 0 && (
+        <div className="answer-section">
+          <div className="answer-section-title">এখন যা করতে হবে</div>
+          <div style={{background:'var(--bg)', border:'1px solid var(--border)', borderLeft:'3px solid var(--green)', borderRadius:'4px', padding:'0.7rem 0.9rem'}}>
+            {data.action_checklist.map((step, i) => (
+              <div key={i} style={{display:'flex', gap:'8px', alignItems:'flex-start', marginBottom:'0.4rem', fontSize:'0.78rem', color:'var(--text)', lineHeight:1.65}}>
+                <span style={{color:'var(--green)', flexShrink:0, marginTop:'2px'}}>•</span>
+                {step}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* APPLICABLE LAWS */}
+      {data.applicable_laws?.length > 0 && (
+        <div className="answer-section">
+          <div className="answer-section-title">প্রযোজ্য আইন</div>
+          {data.applicable_laws.map((l, i) => (
+            <div key={i} className="law-card">
+              <div className="law-card-title">{l.act} — {l.section}</div>
+              <div className="law-card-text" style={{marginBottom:'4px'}}>{l.what_it_says}</div>
+              {l.how_it_applies && (
+                <div style={{fontSize:'0.7rem', color:'var(--blue)', marginBottom:'3px'}}>
+                  → {l.how_it_applies}
+                </div>
+              )}
+              {l.url && (
+                <div className="law-card-link">
+                  <a href={l.url} target="_blank" rel="noopener">{l.url}</a>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* RELEVANT CASES */}
+      {data.relevant_cases?.length > 0 && (
+        <div className="answer-section">
+          <div className="answer-section-title">সংশ্লিষ্ট মামলা</div>
+          {data.relevant_cases.map((c, i) => (
+            <div key={i} style={{
+              background:'var(--bg)', border:'1px solid var(--border)',
+              borderRadius:'4px', padding:'0.5rem 0.8rem', marginBottom:'0.3rem',
+              display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.5rem',
+            }}>
+              <div>
+                <div style={{fontSize:'0.72rem', color:'var(--gold)', fontWeight:600}}>
+                  {c.case_no} ({c.year}) [{c.court}]
+                </div>
+                {c.why_relevant && (
+                  <div style={{fontSize:'0.68rem', color:'var(--text-dim)', marginTop:'2px', lineHeight:1.6}}>
+                    {c.why_relevant}
+                  </div>
+                )}
+              </div>
+              <span className={`outcome-badge ${outcomeColor(c.outcome)}`} style={{flexShrink:0}}>
+                {outcomeLabel(c.outcome)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* HONEST ASSESSMENT */}
+      {data.honest_assessment && (
+        <div className="answer-section">
+          <div className="answer-section-title">সৎ মূল্যায়ন</div>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.4rem'}}>
+            {data.honest_assessment.strengths?.length > 0 && (
+              <div style={{background:'var(--green-bg)', border:'1px solid rgba(76,175,130,0.2)', borderRadius:'6px', padding:'0.6rem'}}>
+                <div style={{fontSize:'0.62rem', color:'var(--green)', marginBottom:'0.3rem', fontWeight:600}}>আপনার পক্ষে</div>
+                {data.honest_assessment.strengths.map((s, i) => (
+                  <div key={i} style={{fontSize:'0.72rem', color:'var(--text-mid)', marginBottom:'2px', lineHeight:1.6}}>• {s}</div>
+                ))}
+              </div>
+            )}
+            {data.honest_assessment.weaknesses?.length > 0 && (
+              <div style={{background:'var(--red-bg)', border:'1px solid rgba(201,76,76,0.2)', borderRadius:'6px', padding:'0.6rem'}}>
+                <div style={{fontSize:'0.62rem', color:'var(--red)', marginBottom:'0.3rem', fontWeight:600}}>সমস্যা হতে পারে</div>
+                {data.honest_assessment.weaknesses.map((w, i) => (
+                  <div key={i} style={{fontSize:'0.72rem', color:'var(--text-mid)', marginBottom:'2px', lineHeight:1.6}}>• {w}</div>
+                ))}
+              </div>
+            )}
+          </div>
+          {data.honest_assessment.critical_factors?.length > 0 && (
+            <div style={{background:'var(--amber-bg)', border:'1px solid rgba(232,160,32,0.2)', borderRadius:'6px', padding:'0.6rem', marginTop:'0.4rem'}}>
+              <div style={{fontSize:'0.62rem', color:'var(--amber)', marginBottom:'0.3rem', fontWeight:600}}>অবশ্যই লাগবে (না থাকলে case দুর্বল)</div>
+              {data.honest_assessment.critical_factors.map((f, i) => (
+                <div key={i} style={{fontSize:'0.72rem', color:'var(--text-mid)', marginBottom:'2px', lineHeight:1.6}}>• {f}</div>
+              ))}
+            </div>
+          )}
+          {data.honest_assessment.win_rate_context && (
+            <div style={{fontSize:'0.7rem', color:'var(--text-dim)', marginTop:'0.4rem', fontStyle:'italic'}}>
+              {data.honest_assessment.win_rate_context}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* STRATEGY */}
+      {data.strategy && (
+        <div className="answer-section">
+          <div className="answer-section-title">কৌশল ও পরিকল্পনা</div>
+          <div style={{background:'var(--bg)', border:'1px solid var(--border)', borderRadius:'6px', padding:'0.8rem'}}>
+            {data.strategy.recommended_action && (
+              <div style={{marginBottom:'0.5rem'}}>
+                <div style={{fontSize:'0.62rem', color:'var(--gold)', marginBottom:'2px'}}>সেরা পদক্ষেপ</div>
+                <div style={{fontSize:'0.76rem', color:'var(--text)', lineHeight:1.7}}>{data.strategy.recommended_action}</div>
+              </div>
+            )}
+            {data.strategy.forum && (
+              <div style={{marginBottom:'0.5rem'}}>
+                <div style={{fontSize:'0.62rem', color:'var(--blue)', marginBottom:'2px'}}>কোথায় যাবেন</div>
+                <div style={{fontSize:'0.75rem', color:'var(--text-mid)'}}>{data.strategy.forum}</div>
+              </div>
+            )}
+            {data.strategy.relief_to_seek && (
+              <div style={{marginBottom:'0.5rem'}}>
+                <div style={{fontSize:'0.62rem', color:'var(--green)', marginBottom:'2px'}}>কী চাইবেন</div>
+                <div style={{fontSize:'0.75rem', color:'var(--text-mid)'}}>{data.strategy.relief_to_seek}</div>
+              </div>
+            )}
+            {data.strategy.documents_needed?.length > 0 && (
+              <div style={{marginBottom:'0.5rem'}}>
+                <div style={{fontSize:'0.62rem', color:'var(--amber)', marginBottom:'4px'}}>প্রয়োজনীয় কাগজপত্র</div>
+                {data.strategy.documents_needed.map((d, i) => (
+                  <div key={i} style={{fontSize:'0.72rem', color:'var(--text-mid)', marginBottom:'2px', display:'flex', gap:'6px'}}>
+                    <span style={{color:'var(--amber)', flexShrink:0}}>•</span>{d}
+                  </div>
+                ))}
+              </div>
+            )}
+            {data.strategy.immediate_steps && (
+              <div style={{background:'var(--surface3)', borderRadius:'4px', padding:'0.5rem 0.7rem', marginTop:'0.3rem'}}>
+                <div style={{fontSize:'0.62rem', color:'var(--green)', marginBottom:'3px', fontWeight:600}}>এখনই করুন</div>
+                <div style={{fontSize:'0.74rem', color:'var(--text)', lineHeight:1.7, whiteSpace:'pre-wrap'}}>{data.strategy.immediate_steps}</div>
+              </div>
+            )}
+            {data.strategy.estimated_timeline && (
+              <div style={{fontSize:'0.68rem', color:'var(--text-dim)', marginTop:'0.4rem'}}>
+                সম্ভাব্য সময়: {data.strategy.estimated_timeline}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* OUTCOME PREDICTION */}
+      {(data.outcome_prediction || winPct !== null) && (
+        <div className="answer-section">
+          <div className="answer-section-title">ফলাফল বিশ্লেষণ</div>
+          <div className="prediction-card">
+            {winPct !== null && (
+              <>
+                <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.72rem', marginBottom:'4px'}}>
+                  <span className="text-dim">Historical win rate</span>
+                  <span className="text-gold" style={{fontWeight:600}}>{winPct}%</span>
+                </div>
+                <div className="win-rate-bar">
+                  <div className="win-rate-fill" style={{width:`${winPct}%`}} />
+                </div>
+                {outcomeStats?.total_similar_cases && (
+                  <div style={{fontSize:'0.63rem', color:'var(--text-dim)', marginBottom:'0.6rem'}}>
+                    {outcomeStats.total_similar_cases} টি similar case বিশ্লেষণ ({outcomeStats.year_range})
+                  </div>
+                )}
+              </>
+            )}
+            {data.outcome_prediction?.historical_win_rate && !winPct && (
+              <div style={{fontSize:'0.75rem', color:'var(--gold)', marginBottom:'0.5rem', fontWeight:600}}>
+                {data.outcome_prediction.historical_win_rate}
+              </div>
+            )}
+            {data.outcome_prediction?.factors_in_your_favor?.length > 0 && (
+              <div style={{marginBottom:'0.5rem'}}>
+                <div style={{fontSize:'0.63rem', color:'var(--green)', marginBottom:'0.3rem'}}>আপনার পক্ষে কাজ করবে</div>
+                {data.outcome_prediction.factors_in_your_favor.map((f, i) => (
+                  <div key={i} className="factor"><span className="factor-icon text-green">+</span>{f}</div>
+                ))}
+              </div>
+            )}
+            {data.outcome_prediction?.factors_against?.length > 0 && (
+              <div style={{marginBottom:'0.5rem'}}>
+                <div style={{fontSize:'0.63rem', color:'var(--red)', marginBottom:'0.3rem'}}>বিপক্ষে যেতে পারে</div>
+                {data.outcome_prediction.factors_against.map((f, i) => (
+                  <div key={i} className="factor"><span className="factor-icon text-red">−</span>{f}</div>
+                ))}
+              </div>
+            )}
+            {data.outcome_prediction?.estimated_timeline && (
+              <div style={{fontSize:'0.72rem', color:'var(--text-mid)', marginTop:'0.4rem'}}>
+                {data.outcome_prediction.estimated_timeline}
+              </div>
+            )}
+            {data.outcome_prediction?.recommendation && (
+              <div style={{fontSize:'0.74rem', color:'var(--amber)', marginTop:'0.4rem', fontWeight:500}}>
+                {data.outcome_prediction.recommendation}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* FOLLOW-UP (clickable multiple-choice options) */}
+      {data.follow_up_options?.length > 0 && (
+        <div className="answer-section">
+          <div className="answer-section-title">আরো জানতে চাই</div>
+          {data.follow_up_options.map((fu, i) => (
+            <div key={i} style={{ marginBottom: '0.7rem' }}>
+              <div style={{ fontSize: '0.74rem', color: 'var(--text-mid)', marginBottom: '0.4rem', lineHeight: 1.6 }}>
+                {fu.question}
+              </div>
+              {fu.options?.length > 0 ? (
+                <div className="suggestions" style={{ justifyContent: 'flex-start' }}>
+                  {fu.options.map((opt, j) => (
+                    <button
+                      key={j}
+                      className={`suggestion ${selectedAnswers[i] === opt ? 'selected' : ''}`}
+                      onClick={() => setSelectedAnswers(prev => {
+                        const next = { ...prev };
+                        if (next[i] === opt) delete next[i];
+                        else next[i] = opt;
+                        return next;
+                      })}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <button
+                  className="suggestion"
+                  onClick={() => {
+                    const input = document.querySelector('.chat-input');
+                    if (input) { input.value = ''; input.focus(); }
+                  }}
+                >
+                  টাইপ করে উত্তর দিন
+                </button>
+              )}
+            </div>
+          ))}
+          {data.follow_up_options.some(fu => fu.options?.length > 0) && (
+            <button
+              className="primary-btn"
+              style={{ marginTop: '0.3rem' }}
+              disabled={Object.keys(selectedAnswers).length === 0}
+              onClick={() => {
+                const answerText = data.follow_up_options
+                  .map((fu, i) => selectedAnswers[i] ? `${fu.question} ${selectedAnswers[i]}` : null)
+                  .filter(Boolean)
+                  .join('\n');
+                if (answerText) onQuickReply && onQuickReply(answerText);
+              }}
+            >
+              উত্তর জমা দিন →
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* FOLLOW-UP QUESTIONS (legacy open-ended, still supported) */}
+      {data.follow_up_questions?.length > 0 && (
+        <div className="answer-section">
+          <div className="answer-section-title">আরো জানতে চাই</div>
+          {data.follow_up_questions.map((q, i) => (
+            <div key={i} style={{
+              background:'var(--surface3)', border:'1px solid var(--border2)',
+              borderRadius:'6px', padding:'0.5rem 0.8rem', marginBottom:'0.3rem',
+              fontSize:'0.74rem', color:'var(--text-mid)', lineHeight:1.6,
+              cursor:'pointer',
+            }}
+            onClick={() => {
+              const input = document.querySelector('.chat-input');
+              if (input) { input.value = q; input.focus(); }
+            }}>
+              {q}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* DISCLAIMER */}
+      {data.disclaimer && (
+        <div className="disclaimer">⚠️ {data.disclaimer}</div>
+      )}
+    </div>
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────
+function App() {
+  const [tab, setTab] = useState('chat');
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API}/api/stats`).then(r => r.json()).then(setStats).catch(() => {});
+  }, []);
+
+  const tabs = [
+    { id: 'chat',    icon: '💬', label: 'Legal Q&A' },
+    { id: 'predict', icon: '🔮', label: 'Outcome Prediction' },
+    { id: 'search',  icon: '🔍', label: 'Case & Law Search' },
+    { id: 'docs',    icon: '📝', label: 'Document Generator' },
+  ];
+
+  return (
+    <div className="app">
+      <header className="header">
+        <div className="logo">
+          <div className="logo-badge">⚖️</div>
+          <div>
+            <div className="logo-name">LegalAI Bangladesh</div>
+            <div className="logo-tagline">Supreme Court Intelligence</div>
+          </div>
+        </div>
+        <div className="header-right">
+          {stats && <>
+            <div className="stat-pill">
+              <strong>{stats.judgements?.estimated_cases?.toLocaleString()}</strong> judgements
+            </div>
+            <div className="stat-pill">
+              <strong>{stats.laws?.total_acts?.toLocaleString()}</strong> laws
+            </div>
+          </>}
+          <div className="stat-pill">
+            <div className="status-dot" /> Live
+          </div>
+        </div>
+      </header>
+
+      <nav className="tabs">
+        {tabs.map(t => (
+          <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`}
+            onClick={() => setTab(t.id)}>
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="main">
+        {tab === 'chat'    && <ChatTab />}
+        {tab === 'predict' && <PredictTab />}
+        {tab === 'search'  && <SearchTab />}
+        {tab === 'docs'    && <DocsTab />}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// CHAT TAB — multi-turn with filters
+// ═══════════════════════════════════════════════════════
+function ChatTab() {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState({});
+  const bottomRef = useRef();
+
+  const suggestions = [
+    'জমি দখলের মামলায় কী করতে পারি?',
+    'Murder case এ bail পাওয়ার সম্ভাবনা কী?',
+    'চেক ডিজঅনার মামলার সম্পূর্ণ procedure কী?',
+    'Divorce এর আইনি প্রক্রিয়া কী?',
+    'Section 302 Penal Code কী বলে?',
+    'Writ petition কখন করা যায়?',
+  ];
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const sendMessage = async (text) => {
+    const q = (text || input).trim();
+    if (!q || loading) return;
+    setInput('');
+
+    const userMsg = { role: 'user', content: q };
+    setMessages(prev => [...prev, { type: 'user', text: q }]);
+    setLoading(true);
+
+    // Build history for API
+    const history = messages.map(m => ({
+      role: m.type === 'user' ? 'user' : 'assistant',
+      content: m.text || JSON.stringify(m.answer)
+    }));
+
+    try {
+      const res = await fetch(`${API}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: q,
+          history: history.slice(-6),
+          filters: Object.keys(filters).length ? filters : null
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessages(prev => [...prev, { type: 'ai', text: `❌ ${data.detail || 'কিছু একটা ভুল হয়েছে।'}` }]);
+        setLoading(false);
+        return;
+      }
+      setMessages(prev => [...prev, {
+        type: 'ai',
+        answer: data.answer,
+        intent: data.intent,
+        outcomeStats: data.outcome_stats,
+        sources: data.sources,
+      }]);
+    } catch {
+      setMessages(prev => [...prev, {
+        type: 'ai',
+        text: '❌ Server এ connect হচ্ছে না। API চালু আছে কিনা check করো।',
+      }]);
+    }
+    setLoading(false);
+  };
+
+  const updateFilter = (key, val) => {
+    setFilters(prev => val ? { ...prev, [key]: val } : (({ [key]: _, ...rest }) => rest)(prev));
+  };
+
+  return (
+    <div className="chat-layout">
+      <div className="messages">
+        {messages.length === 0 && (
+          <div className="welcome">
+            <div className="welcome-icon">⚖️</div>
+            <h2>বাংলাদেশ আইনি সহায়তা</h2>
+            <p className="welcome-sub">
+              ৮,৬১৫টি Supreme Court judgement এবং<br/>
+              ১,৩৯৯টি Bangladesh আইন থেকে সাহায্য করবো।<br/>
+              <span className="text-gold">Bangla বা English — যেকোনো ভাষায় জিজ্ঞেস করুন।</span>
+            </p>
+            <div className="suggestions">
+              {suggestions.map((s, i) => (
+                <button key={i} className="suggestion" onClick={() => sendMessage(s)}>{s}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg, i) => (
+          <div key={i} className={`msg ${msg.type}`}>
+            <div className={`avatar ${msg.type}`}>
+              {msg.type === 'ai' ? '⚖️' : '👤'}
+            </div>
+            <div className={`bubble ${msg.type}`}>
+              {msg.type === 'ai' ? (
+                <AnswerCard
+                  data={msg.answer}
+                  intent={msg.intent}
+                  outcomeStats={msg.outcomeStats}
+                  onQuickReply={sendMessage}
+                />
+              ) : msg.text}
+            </div>
+          </div>
+        ))}
+
+        {loading && (
+          <div className="msg">
+            <div className="avatar ai">⚖️</div>
+            <div className="bubble ai">
+              <div className="loading-dots">
+                Cases ও আইন analyze করছি
+                <div className="dot" /><div className="dot" /><div className="dot" />
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <div className="input-area">
+        <div className="filter-row">
+          <span className="filter-label">Filters:</span>
+          <select className="filter-select" onChange={e => updateFilter('case_type', e.target.value)} defaultValue="">
+            <option value="">সব case type</option>
+            <option value="civil_revision">Civil Revision</option>
+            <option value="writ_petition">Writ Petition</option>
+            <option value="criminal_appeal">Criminal Appeal</option>
+            <option value="criminal_revision">Criminal Revision</option>
+            <option value="first_appeal">First Appeal</option>
+            <option value="death_reference">Death Reference</option>
+          </select>
+          <select className="filter-select" onChange={e => updateFilter('division', e.target.value)} defaultValue="">
+            <option value="">সব court</option>
+            <option value="HCD">High Court Division</option>
+            <option value="AD">Appellate Division</option>
+          </select>
+          <select className="filter-select" onChange={e => updateFilter('year_from', e.target.value)} defaultValue="">
+            <option value="">সব year</option>
+            <option value="2020">2020+</option>
+            <option value="2015">2015+</option>
+            <option value="2010">2010+</option>
+            <option value="2000">2000+</option>
+          </select>
+        </div>
+
+        <div className="input-row">
+          <input
+            className="chat-input"
+            placeholder="আপনার আইনি প্রশ্ন লিখুন... (Enter চাপুন)"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+            disabled={loading}
+          />
+          {messages.length > 0 && (
+            <button className="clear-btn" onClick={() => setMessages([])}>Clear</button>
+          )}
+          <button className="send-btn" onClick={() => sendMessage()} disabled={loading || !input.trim()}>
+            {loading ? <span className="spinner" /> : 'Send →'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// PREDICT TAB — outcome prediction
+// ═══════════════════════════════════════════════════════
+function PredictTab() {
+  const [situation, setSituation] = useState('');
+  const [caseType, setCaseType] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const caseTypes = [
+    { id: '', label: 'Auto detect' },
+    { id: 'civil_revision', label: 'Civil Revision' },
+    { id: 'writ_petition', label: 'Writ Petition' },
+    { id: 'criminal_appeal', label: 'Criminal Appeal' },
+    { id: 'criminal_revision', label: 'Criminal Revision' },
+    { id: 'first_appeal', label: 'First Appeal' },
+  ];
+
+  const examples = [
+    'আমার জমির registered deed আছে, প্রতিপক্ষ জোর করে দখল নিয়েছে। ৩ জন সাক্ষী আছে এবং mutation আমার নামে।',
+    'চেক ডিজঅনার হয়েছে ৫ লক্ষ টাকার। চেক দেওয়ার পর ব্যাংক account বন্ধ করে দিয়েছে অপরপক্ষ।',
+    'সরকারি চাকরি থেকে বিনা নোটিশে বরখাস্ত করা হয়েছে। ২০ বছরের service record ভালো।',
+  ];
+
+  const predict = async (overrideSituation) => {
+    const sit = (typeof overrideSituation === 'string' ? overrideSituation : situation).trim();
+    if (!sit) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch(`${API}/api/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ situation: sit, case_type: caseType || null })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setResult({ error: data.detail || 'কিছু একটা ভুল হয়েছে।' });
+      } else {
+        setResult(data);
+      }
+    } catch {
+      setResult({ error: 'Server এ connect হচ্ছে না।' });
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="panel">
+      <div className="panel-card">
+        <div className="panel-card-title">🔮 আপনার আইনি পরিস্থিতি বর্ণনা করুন</div>
+
+        <div className="section-label" style={{ marginBottom: '0.5rem' }}>Case Type (optional):</div>
+        <div className="select-group" style={{ marginBottom: '0.8rem' }}>
+          {caseTypes.map(t => (
+            <button key={t.id} className={`select-chip ${caseType === t.id ? 'active' : ''}`}
+              onClick={() => setCaseType(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <textarea
+          className="big-textarea"
+          placeholder="আপনার পরিস্থিতি বিস্তারিত বলুন — কী ঘটেছে, কী প্রমাণ আছে, কতদিন আগে..."
+          value={situation}
+          onChange={e => setSituation(e.target.value)}
+        />
+
+        <div style={{ marginTop: '0.6rem', marginBottom: '0.8rem' }}>
+          <div className="section-label">উদাহরণ:</div>
+          <div className="suggestions" style={{ justifyContent: 'flex-start' }}>
+            {examples.map((e, i) => (
+              <button key={i} className="suggestion" onClick={() => setSituation(e)}>
+                {e.substring(0, 50)}...
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button className="primary-btn" onClick={() => predict()}
+          disabled={loading || !situation.trim()}>
+          {loading ? <><span className="spinner" style={{ marginRight: '6px' }} /> Analyzing...</> : '🔮 Predict Outcome →'}
+        </button>
+      </div>
+
+      {result && !result.error && (
+        <>
+          {result.outcome_stats && (
+            <div className="panel-card">
+              <div className="panel-card-title">📊 Historical Statistics</div>
+              <div className="stats-row">
+                <div className="stat-box">
+                  <div className="stat-box-num text-gold">{result.similar_cases_used}</div>
+                  <div className="stat-box-label">Similar Cases</div>
+                </div>
+                <div className="stat-box">
+                  <div className="stat-box-num text-green">{result.outcome_stats.win_rate_pct}%</div>
+                  <div className="stat-box-label">Win Rate</div>
+                </div>
+                <div className="stat-box">
+                  <div className="stat-box-num text-green">{result.outcome_stats.petitioner_won}</div>
+                  <div className="stat-box-label">Petitioner Won</div>
+                </div>
+                <div className="stat-box">
+                  <div className="stat-box-num text-red">{result.outcome_stats.petitioner_lost}</div>
+                  <div className="stat-box-label">Petitioner Lost</div>
+                </div>
+                <div className="stat-box">
+                  <div className="stat-box-num">{result.laws_referenced}</div>
+                  <div className="stat-box-label">Laws Found</div>
+                </div>
+              </div>
+              <div className="win-rate-bar" style={{ marginTop: '0.8rem' }}>
+                <div className="win-rate-fill" style={{ width: `${result.outcome_stats.win_rate_pct}%` }} />
+              </div>
+            </div>
+          )}
+
+          <div className="panel-card">
+            <div className="panel-card-title">⚖️ AI Analysis</div>
+            <AnswerCard
+              data={result.prediction}
+              intent="prediction"
+              outcomeStats={result.outcome_stats}
+              onQuickReply={(text) => {
+                const updated = situation.trim() ? `${situation}\n${text}` : text;
+                setSituation(updated);
+                predict(updated);
+              }}
+            />
+          </div>
+        </>
+      )}
+
+      {result?.error && (
+        <div className="panel-card" style={{ borderColor: 'var(--red)' }}>
+          <div className="text-red">{result.error}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// SEARCH TAB — dual collection search with filters
+// ═══════════════════════════════════════════════════════
+function SearchTab() {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [searchType, setSearchType] = useState('both');
+  const [caseTypeFilter, setCaseTypeFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
+  const [outcomeFilter, setOutcomeFilter] = useState('');
+
+  const search = async () => {
+    if (!query.trim()) return;
+    setLoading(true);
+    const filters = {};
+    if (caseTypeFilter) filters.case_type = caseTypeFilter;
+    if (yearFilter) filters.year_from = parseInt(yearFilter);
+    if (outcomeFilter) filters.outcome = outcomeFilter;
+
+    try {
+      const res = await fetch(`${API}/api/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query, search_type: searchType, n_results: 8,
+          filters: Object.keys(filters).length ? filters : null
+        })
+      });
+      const data = await res.json();
+      setResults(data);
+    } catch {
+      setResults({ error: true });
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="search-panel">
+      <div className="search-bar-row">
+        <input
+          className="search-input"
+          placeholder="Search cases and laws — e.g. 'land dispute mutation', 'Section 302', 'চেক ডিজঅনার'..."
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && search()}
+        />
+        <button className="primary-btn" onClick={search} disabled={loading || !query.trim()}>
+          {loading ? <span className="spinner" /> : 'Search →'}
+        </button>
+      </div>
+
+      <div className="filter-bar">
+        <span className="filter-bar-label">Search in:</span>
+        <div className="search-type-toggle">
+          {[['both','Both'],['judgements','Cases'],['laws','Laws']].map(([v,l]) => (
+            <button key={v} className={`toggle-btn ${searchType===v?'active':''}`}
+              onClick={() => setSearchType(v)}>{l}</button>
+          ))}
+        </div>
+
+        <select className="filter-select" value={caseTypeFilter}
+          onChange={e => setCaseTypeFilter(e.target.value)}>
+          <option value="">All types</option>
+          <option value="civil_revision">Civil Revision</option>
+          <option value="writ_petition">Writ Petition</option>
+          <option value="criminal_appeal">Criminal Appeal</option>
+          <option value="criminal_revision">Criminal Revision</option>
+          <option value="first_appeal">First Appeal</option>
+          <option value="death_reference">Death Reference</option>
+        </select>
+
+        <select className="filter-select" value={yearFilter}
+          onChange={e => setYearFilter(e.target.value)}>
+          <option value="">All years</option>
+          <option value="2020">2020+</option>
+          <option value="2015">2015+</option>
+          <option value="2010">2010+</option>
+          <option value="2000">2000+</option>
+        </select>
+
+        <select className="filter-select" value={outcomeFilter}
+          onChange={e => setOutcomeFilter(e.target.value)}>
+          <option value="">All outcomes</option>
+          <option value="rule_absolute">Absolute (Won)</option>
+          <option value="rule_discharged">Discharged (Lost)</option>
+          <option value="allowed">Allowed</option>
+          <option value="dismissed">Dismissed</option>
+          <option value="disposed">Disposed</option>
+        </select>
+      </div>
+
+      {!results && !loading && (
+        <div className="empty-state">
+          🔍 উপরে search করুন — cases ও আইন উভয়ই দেখাবে
+        </div>
+      )}
+
+      {results && (
+        <div className="results-grid">
+          {/* Cases */}
+          {results.judgements?.length > 0 && (
+            <>
+              <div className="section-label">
+                ⚖️ Cases ({results.judgements.length})
+              </div>
+              {results.judgements.map((c, i) => (
+                <div key={i} className="result-card">
+                  <div className="result-card-header">
+                    <div className="result-card-title">📄 {c.case_no}</div>
+                    <div className="result-card-meta">
+                      {c.year > 0 && <span className="meta-tag">{c.year}</span>}
+                      <span className="meta-tag">{c.division || 'HCD'}</span>
+                      {c.outcome && (
+                        <span className={`outcome-badge ${outcomeColor(c.outcome)}`}>
+                          {outcomeLabel(c.outcome)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {c.subjects && (
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>
+                      🏷️ {c.subjects.split(',').join(' · ')}
+                    </div>
+                  )}
+                  <div className="result-card-preview">{c.preview}</div>
+                  <div className="result-card-score">
+                    Relevance: <span className="score-fill">{scoreBar(c.score)}</span>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* Laws */}
+          {results.laws?.length > 0 && (
+            <>
+              <div className="section-label" style={{ marginTop: '0.5rem' }}>
+                📜 Laws ({results.laws.length})
+              </div>
+              {results.laws.map((l, i) => (
+                <div key={i} className="law-result-card">
+                  <div className="result-card-header">
+                    <div className="result-card-title text-blue">
+                      📜 {l.title}
+                    </div>
+                    <div className="result-card-meta">
+                      {l.year > 0 && <span className="meta-tag">{l.year}</span>}
+                      <span className="meta-tag">{l.type}</span>
+                    </div>
+                  </div>
+                  {l.section && (
+                    <div style={{ fontSize: '0.7rem', color: 'var(--blue)', marginBottom: '0.4rem' }}>
+                      § {l.section}
+                    </div>
+                  )}
+                  <div className="result-card-preview">{l.preview}</div>
+                  {l.url && (
+                    <div style={{ fontSize: '0.63rem', marginTop: '0.4rem' }}>
+                      🔗 <a href={l.url} target="_blank" rel="noopener"
+                        style={{ color: 'var(--gold-dim)', textDecoration: 'none' }}>
+                        {l.url}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+
+          {results.error && (
+            <div className="empty-state text-red">❌ Search failed. Server চালু আছে কিনা check করো।</div>
+          )}
+
+          {!results.error && !results.judgements?.length && !results.laws?.length && (
+            <div className="empty-state">কোনো result পাওয়া যায়নি। অন্য keyword try করুন।</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// DOCS TAB
+// ═══════════════════════════════════════════════════════
+function DocsTab() {
+  const [selected, setSelected] = useState('');
+  const [details, setDetails] = useState('');
+  const [output, setOutput] = useState('');
+  const [lawsRef, setLawsRef] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const docTypes = [
+    { id: 'nda',       emoji: '🤝', name: 'NDA',           nameBn: 'গোপনীয়তা চুক্তি' },
+    { id: 'sale_deed', emoji: '🏠', name: 'Sale Deed',     nameBn: 'বিক্রয় দলিল' },
+    { id: 'rent',      emoji: '🔑', name: 'Rent Agreement',nameBn: 'ভাড়া চুক্তি' },
+    { id: 'affidavit', emoji: '📜', name: 'Affidavit',     nameBn: 'হলফনামা' },
+    { id: 'complaint', emoji: '📋', name: 'Complaint',     nameBn: 'অভিযোগ' },
+    { id: 'writ',      emoji: '⚖️', name: 'Writ Petition', nameBn: 'রিট পিটিশন' },
+    { id: 'plaint',    emoji: '📄', name: 'Plaint',        nameBn: 'আরজি' },
+  ];
+
+  const generate = async () => {
+    if (!selected || !details.trim()) return;
+    setLoading(true);
+    setOutput(''); setLawsRef([]);
+    try {
+      const res = await fetch(`${API}/api/generate-doc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doc_type: selected, details })
+      });
+      const data = await res.json();
+      setOutput(data.document);
+      setLawsRef(data.laws_referenced || []);
+    } catch {
+      setOutput('❌ Error. Server চালু আছে কিনা check করো।');
+    }
+    setLoading(false);
+  };
+
+  const handleCopy = () => {
+    copyText(output);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="docs-panel">
+      <div>
+        <div className="section-label">Document type বেছে নিন:</div>
+        <div className="doc-types-grid">
+          {docTypes.map(d => (
+            <button key={d.id}
+              className={`doc-type-card ${selected === d.id ? 'selected' : ''}`}
+              onClick={() => setSelected(d.id)}>
+              <span className="doc-icon">{d.emoji}</span>
+              <div className="doc-name">{d.name}</div>
+              <div className="doc-name-bn">{d.nameBn}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="section-label">Details দিন:</div>
+        <textarea
+          className="big-textarea"
+          style={{ minHeight: '130px' }}
+          placeholder="Parties এর নাম, address, জমির পরিমাণ, মূল্য, শর্তাবলী ইত্যাদি বিস্তারিত লিখুন..."
+          value={details}
+          onChange={e => setDetails(e.target.value)}
+        />
+      </div>
+
+      <button className="primary-btn" onClick={generate}
+        disabled={loading || !selected || !details.trim()}>
+        {loading
+          ? <><span className="spinner" style={{ marginRight: '6px' }} /> Generating...</>
+          : '📄 Generate Document →'}
+      </button>
+
+      {lawsRef.length > 0 && (
+        <div>
+          <div className="section-label">Referenced Laws:</div>
+          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+            {lawsRef.map((l, i) => (
+              <div key={i} className="case-chip">
+                <a href={l.url} target="_blank" rel="noopener"
+                  style={{ color: 'var(--blue)', textDecoration: 'none', fontSize: '0.68rem' }}>
+                  {l.title} § {l.section}
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {output && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <div className="section-label">Generated Document:</div>
+            <button className="copy-btn" onClick={handleCopy}>
+              {copied ? '✓ Copied!' : '📋 Copy'}
+            </button>
+          </div>
+          <div className="doc-output-area">{output}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>

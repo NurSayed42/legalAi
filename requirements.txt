@@ -1,0 +1,26 @@
+# Bangladesh Legal AI v3 — Python Dependencies
+
+# Core
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.0.0
+
+# Vector DB
+chromadb>=0.5.0
+sentence-transformers>=2.7.0
+
+# LLM
+groq>=0.9.0
+google-genai>=0.3.0     # Gemini — primary
+
+# Orchestration
+langgraph>=0.2.0
+
+# Hybrid retrieval
+rank-bm25>=0.2.2
+
+# Utils
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0

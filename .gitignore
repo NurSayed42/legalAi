@@ -1,0 +1,35 @@
+# Secrets
+.env
+
+# Large data files
+judgements.json
+bangladesh_laws.json
+
+# Vector DB (rebuild with scripts)
+legal_chroma_db/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Claude Code local settings
+.claude/settings.local.json
