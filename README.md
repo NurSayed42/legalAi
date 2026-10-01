@@ -1,4 +1,4 @@
-# Bangladesh Legal AI — RAG-based Legal Research Assistant
+# Bangladesh Legal RAG — Legal Research Assistant
 
 A retrieval-augmented generation (RAG) system that answers legal questions grounded in Bangladesh Supreme Court judgements and the full body of Bangladesh statutes, with explicit safeguards against hallucinated citations, weak retrieval, and overconfident predictions.
 
@@ -127,3 +127,70 @@ finalize            → structured JSON response
 - **Few-shot exemplars** — the generation prompt doesn't yet include verified real-case examples, which would likely improve grounding further.
 
 ---
+
+## 10. Project Structure
+
+```
+scraper.py                # Supreme Court judgement PDF discovery + download
+extract_text.py           # PDF → text extraction (PyPDF2)
+govt_scraper.py           # Bangladesh Acts scraper (bdlaws)
+laws_scraper_fixed.py     # Section-level laws scraper
+enrich_judgements.py      # Rule-based metadata extraction + judgements collection
+build_laws_vectordb.py    # Laws collection (section-level documents)
+api_v3.py                 # FastAPI app + LangGraph pipeline (current)
+api_v2.py                 # Previous API version
+legal_ui_v2.html          # Single-file web UI for the API
+requirements.txt
+.env.example
+```
+
+---
+
+## 11. Getting Started
+
+```bash
+git clone https://github.com/NurSayed42/legalAi.git
+cd legalAi
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env          # add your API keys
+```
+
+Build the data and vector store (one-time; downloads public court and legislation data):
+
+```bash
+python scraper.py                 # judgement PDFs
+python extract_text.py            # PDF → text
+python enrich_judgements.py       # metadata + judgements collection
+python laws_scraper_fixed.py      # statutes
+python build_laws_vectordb.py     # laws collection
+```
+
+Run the API and open the UI:
+
+```bash
+uvicorn api_v3:app --reload --port 8000
+# then open legal_ui_v2.html in a browser (it calls http://localhost:8000)
+```
+
+---
+
+## 12. Environment Variables
+
+| Variable | Purpose |
+|---|---|
+| `GEMINI_API_KEY` | Primary LLM |
+| `GROQ_API_KEY` | Fallback LLM (Llama 3.3 70B via Groq) |
+| `GEMINI_MODEL` | Optional model override |
+| `CHROMA_DB_PATH` | Path to the persistent ChromaDB directory |
+| `LOG_LEVEL` | Optional logging level |
+
+---
+
+## Disclaimer
+
+This is a research tool, not legal advice. Answers should be checked against the cited judgements and statutes.
+
+## Author
+
+**Nur Sayed** — Lead Engineer at VecoSoft · [GitHub](https://github.com/NurSayed42)
