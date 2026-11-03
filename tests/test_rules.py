@@ -10,9 +10,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from legal_rules import (  # noqa: E402
-    CONSTITUTION, CRPC, MFLO, NI_ACT, PENAL_CODE, detect_acts, detect_section_request, expand_query,
-    find_persona_claims, inline_section_mentions, is_only_question, normalize_answer, procedure_gaps,
-    resolve_intent, strip_persona_sentences,
+    CONSTITUTION,
+    CRPC,
+    MFLO,
+    NI_ACT,
+    PENAL_CODE,
+    detect_acts,
+    detect_section_request,
+    expand_query,
+    find_persona_claims,
+    inline_section_mentions,
+    is_only_question,
+    normalize_answer,
+    procedure_gaps,
+    resolve_intent,
+    strip_persona_sentences,
 )
 
 

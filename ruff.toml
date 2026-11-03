@@ -1,0 +1,16 @@
+line-length = 130
+target-version = "py310"
+extend-exclude = ["venv", "legal_chroma_db", "text_v2", "downloaded_pdfs", "tessdata"]
+
+[lint]
+# pyflakes, pycodestyle errors/warnings, import order. Long prompt strings are allowed;
+# `l` for a law/section item is the codebase's existing idiom.
+select = ["E", "F", "W", "I"]
+ignore = ["E501", "E741"]
+
+[lint.per-file-ignores]
+# sys.path / sys.stdout are set up before importing project modules
+"tests/*" = ["E402"]
+"ingestion/*" = ["E402"]
+"api_v2.py" = ["E402"]
+"api_v3.py" = ["E402"]

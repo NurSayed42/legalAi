@@ -9,10 +9,11 @@ import json
 import os
 import re
 import sys
-from dotenv import load_dotenv
-from tqdm import tqdm
+
 import chromadb
 from chromadb.utils import embedding_functions
+from dotenv import load_dotenv
+from tqdm import tqdm
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
