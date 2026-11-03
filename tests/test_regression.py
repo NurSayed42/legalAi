@@ -22,7 +22,7 @@ from legal_rules import find_persona_claims  # noqa: E402
 
 API = "http://localhost:8000"
 ANSWER_KEYS = ["short_answer", "applicable_laws", "relevant_cases", "procedure", "risks",
-               "when_to_see_lawyer", "follow_up_options", "disclaimer"]
+               "when_to_see_lawyer", "follow_up_options", "disclaimer", "summary"]   # summary = পুরনো alias
 
 
 @functools.lru_cache(maxsize=None)

@@ -16,25 +16,27 @@ Pipeline (প্রতিটা node নিচে আলাদা function):
 Deterministic নিয়মগুলো (alias, intent, persona, schema) legal_rules.py তে।
 """
 
+import json
 import os
 import re
 import sys
-import json
 import time
 import warnings
-from typing import Optional, TypedDict
 from collections import Counter, defaultdict
+from typing import Optional, TypedDict
+
 from dotenv import load_dotenv
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
+import json as _json
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import json as _json
 
 
 class UTF8JSONResponse(JSONResponse):
@@ -45,13 +47,12 @@ class UTF8JSONResponse(JSONResponse):
         ).encode("utf-8")
 
 
-import torch
 import chromadb
+import torch
 from chromadb.utils import embedding_functions
+from groq import Groq
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
-
-from groq import Groq
 
 try:
     from google import genai
@@ -60,13 +61,25 @@ try:
 except ImportError:
     GEMINI_AVAILABLE = False
 
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 
 from legal_rules import (
-    BN_DIGITS, PRIORITY_ACTS, detect_acts, detect_section_request, expand_query,
-    find_persona_claims, inline_case_refs, inline_section_mentions, is_only_question,
-    normalize_answer, procedure_gaps, resolve_intent, section_label, section_numbers_in,
-    strip_persona_sentences, validate_follow_up_options,
+    BN_DIGITS,
+    PRIORITY_ACTS,
+    detect_acts,
+    detect_section_request,
+    expand_query,
+    find_persona_claims,
+    inline_case_refs,
+    inline_section_mentions,
+    is_only_question,
+    normalize_answer,
+    procedure_gaps,
+    resolve_intent,
+    section_label,
+    section_numbers_in,
+    strip_persona_sentences,
+    validate_follow_up_options,
 )
 
 load_dotenv()
@@ -1095,6 +1108,7 @@ def finalize_node(state: GraphState) -> dict:
                 "division": j["meta"].get("division"),
                 "subjects": j["meta"].get("subjects"),
                 "rerank_score": round(j.get("rerank_score", 0), 4),
+                "score": round(j.get("rerank_score", 0), 4),   # পুরনো client এর জন্য
             }
             for j in retrieved["judgements"][:MAX_CASES_IN_ANSWER]
         ],
@@ -1105,6 +1119,7 @@ def finalize_node(state: GraphState) -> dict:
                 "url": l["meta"].get("url"),
                 "year": l["meta"].get("year"),
                 "rerank_score": round(l.get("rerank_score", 0), 4),
+                "score": round(l.get("rerank_score", 0), 4),   # পুরনো client এর জন্য
                 **({"targeted_lookup": True} if l.get("targeted") else {}),
             }
             for l in retrieved["laws"]
@@ -1155,8 +1170,10 @@ def run_pipeline(question: str, history: list | None = None, filters: dict | Non
                               "forced_intent": forced_intent}
     final_state = legal_graph.invoke(init_state)
     retrieved = final_state.get("retrieved") or {"laws": [], "judgements": []}
+    answer = final_state.get("structured_answer") or normalize_answer({})
     return {
-        "answer": final_state.get("structured_answer") or normalize_answer({}),
+        # 'summary' = আগের schema র field নাম; পুরনো client ভাঙে না (SPEC: field বাদ দেওয়া যাবে না)
+        "answer": {**answer, "summary": answer["short_answer"]},
         "sources": final_state.get("sources", {"cases": [], "laws": []}),
         "intent": final_state.get("intent"),
         "outcome_stats": final_state.get("outcome_stats", {}),
@@ -1259,6 +1276,7 @@ def search(req: SearchRequest):
                 "score": round(l.get("score", 0), 4),
             })
 
+    results["judgements"] = results["cases"]   # আগের response key — পুরনো client এর জন্য রাখা
     return results
 
 
