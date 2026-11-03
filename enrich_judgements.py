@@ -10,14 +10,22 @@ Metadata per judgement:
 """
 
 import json
+import os
 import re
+from dotenv import load_dotenv
 from tqdm import tqdm
 import chromadb
 from chromadb.utils import embedding_functions
 
+load_dotenv()
+
 # ─── CONFIG ───────────────────────────────────────────────
 JUDGEMENTS_FILE = "./judgements.json"
-CHROMA_DB_PATH  = "./legal_chroma_db"
+# clean_metadata.py চালানো থাকলে এগুলো ব্যবহার হয় — OCR-fixed text আর header থেকে আসা
+# case_no/case_type, LLM subject label, text_quality
+CLEAN_FILE      = "./judgements_clean.json"
+LABELS_FILE     = "./judgement_labels.json"
+CHROMA_DB_PATH  = os.getenv("CHROMA_DB_PATH", "./legal_chroma_db")   # api_v3.py এর সাথে একই path
 COLLECTION_NAME = "bangladesh_judgements"
 EMBED_MODEL     = "paraphrase-multilingual-MiniLM-L12-v2"
 CHUNK_SIZE      = 600   # words per chunk (reduced for better precision)
@@ -176,9 +184,15 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE,
 # ─── MAIN ─────────────────────────────────────────────────
 
 def build_judgements_collection():
-    print("📂 judgements.json load করছি...")
-    with open(JUDGEMENTS_FILE, encoding="utf-8") as f:
+    source = CLEAN_FILE if os.path.exists(CLEAN_FILE) else JUDGEMENTS_FILE
+    print(f"📂 {source} load করছি...")
+    with open(source, encoding="utf-8") as f:
         judgements = json.load(f)
+    labels = {}
+    if os.path.exists(LABELS_FILE):
+        with open(LABELS_FILE, encoding="utf-8") as f:
+            labels = json.load(f)
+        print(f"🏷️  {LABELS_FILE} থেকে {len(labels)} টা judgement এর cleaned label")
     print(f"✅ {len(judgements)} টা judgement পেলাম\n")
 
     print("🤖 Embedding model load করছি...")
@@ -208,13 +222,14 @@ def build_judgements_collection():
         text     = case["text"]
 
         # ── Extract metadata ──
+        label    = labels.get(filename, {})
         year     = extract_year(filename, text)
-        case_type = extract_case_type(filename)
+        case_type = label.get("case_type") or extract_case_type(filename)
         outcome  = extract_outcome(filename, text)
         division = extract_division(text)
         judges   = extract_judges(text)
-        subjects = extract_subject_keywords(text)
-        case_no  = extract_case_no(filename)
+        subjects = ",".join(label["subjects"]) if label.get("subjects") else extract_subject_keywords(text)
+        case_no  = label.get("case_no") or extract_case_no(filename)
 
         base_meta = {
             "filename":    filename,
@@ -225,6 +240,7 @@ def build_judgements_collection():
             "outcome":     outcome,
             "judges":      judges,
             "subjects":    subjects,
+            "text_quality": label.get("text_quality", "ok"),
             "source_type": "judgement",
         }
 

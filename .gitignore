@@ -5,6 +5,11 @@
 judgements.json
 bangladesh_laws.json
 
+# clean_metadata.py output (derived data, rebuild with the script)
+judgements_clean.json
+judgement_labels.json
+judgement_subjects.jsonl
+
 # Vector DB (rebuild with scripts)
 legal_chroma_db/
 
