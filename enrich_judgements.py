@@ -7,15 +7,24 @@ judgements.json থেকে rich metadata extract করো,
 Metadata per judgement:
   filename, case_no, year, division, case_type,
   outcome, judges (partial), subject_keywords, word_count
+
+    python enrich_judgements.py                                   # cleaned text/labels থাকলে সেগুলো
+    python enrich_judgements.py --text raw --labels regex         # আসল v1 baseline index
+    python enrich_judgements.py --collection bangladesh_judgements_v2
+
+Collection টা "<name>__building" এ তৈরি হয়, শেষ হলে তবেই পুরনোটার জায়গা নেয় — মাঝপথে বন্ধ
+হলে চালু index নষ্ট হয় না, আবার চালালে যেখানে থেমেছিল সেখান থেকে চলে।
 """
 
+import argparse
 import json
 import os
 import re
-from dotenv import load_dotenv
-from tqdm import tqdm
+
 import chromadb
 from chromadb.utils import embedding_functions
+from dotenv import load_dotenv
+from tqdm import tqdm
 
 load_dotenv()
 
@@ -183,17 +192,22 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE,
 
 # ─── MAIN ─────────────────────────────────────────────────
 
-def build_judgements_collection():
-    source = CLEAN_FILE if os.path.exists(CLEAN_FILE) else JUDGEMENTS_FILE
+def build_judgements_collection(text_source: str = "auto", label_source: str = "auto",
+                                collection_name: str = COLLECTION_NAME):
+    if text_source == "auto":
+        text_source = "clean" if os.path.exists(CLEAN_FILE) else "raw"
+    if label_source == "auto":
+        label_source = "clean" if os.path.exists(LABELS_FILE) else "regex"
+    source = CLEAN_FILE if text_source == "clean" else JUDGEMENTS_FILE
     print(f"📂 {source} load করছি...")
     with open(source, encoding="utf-8") as f:
         judgements = json.load(f)
     labels = {}
-    if os.path.exists(LABELS_FILE):
+    if label_source == "clean":
         with open(LABELS_FILE, encoding="utf-8") as f:
             labels = json.load(f)
         print(f"🏷️  {LABELS_FILE} থেকে {len(labels)} টা judgement এর cleaned label")
-    print(f"✅ {len(judgements)} টা judgement পেলাম\n")
+    print(f"✅ {len(judgements)} টা judgement পেলাম → {collection_name} (text={text_source}, labels={label_source})\n")
 
     print("🤖 Embedding model load করছি...")
     embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
@@ -201,15 +215,9 @@ def build_judgements_collection():
     )
 
     client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-
-    try:
-        client.delete_collection(COLLECTION_NAME)
-        print("🗑️  পুরনো judgements collection delete করলাম")
-    except Exception:
-        pass
-
-    collection = client.create_collection(
-        name=COLLECTION_NAME,
+    building_name = f"{collection_name}__building"
+    collection = client.get_or_create_collection(
+        name=building_name,
         embedding_function=embedding_fn,
         metadata={"hnsw:space": "cosine"},
     )
@@ -255,15 +263,27 @@ def build_judgements_collection():
 
     print(f"\n📊 মোট {len(all_docs)} টা chunk তৈরি হলো")
 
+    # আগের অসম্পূর্ণ run এর chunk গুলো আবার embed না করে সেখান থেকে চালাও (একই ক্রমে add হয়)
+    resume_from = collection.count() // BATCH_SIZE * BATCH_SIZE
+    if resume_from:
+        print(f"↩️  {building_name} এ আগের run এর {resume_from} টা chunk আছে — সেখান থেকে চলছে")
+
     print("\n💾 ChromaDB তে store করছি...")
-    for i in tqdm(range(0, len(all_docs), BATCH_SIZE), desc="Storing"):
-        collection.add(
+    for i in tqdm(range(resume_from, len(all_docs), BATCH_SIZE), desc="Storing"):
+        collection.upsert(
             documents=all_docs[i:i + BATCH_SIZE],
             ids=all_ids[i:i + BATCH_SIZE],
             metadatas=all_metas[i:i + BATCH_SIZE],
         )
 
-    print(f"\n✅ Judgements collection ready! {collection.count()} টা chunk stored।")
+    # সম্পূর্ণ হলে তবেই পুরনো collection এর জায়গা নেয়
+    try:
+        client.delete_collection(collection_name)
+        print(f"🗑️  পুরনো {collection_name} delete করলাম")
+    except Exception:
+        pass
+    collection.modify(name=collection_name)
+    print(f"\n✅ {collection_name} ready! {collection.count()} টা chunk stored।")
 
     # Quick stats
     print("\n📈 Outcome distribution:")
@@ -293,7 +313,18 @@ def test_search(collection, query: str, filters: dict = None):
 
 
 if __name__ == "__main__":
-    col = build_judgements_collection()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--text", choices=["auto", "raw", "clean"], default="auto",
+                    help="raw = judgements.json, clean = clean_metadata.py এর judgements_clean.json")
+    ap.add_argument("--labels", choices=["auto", "regex", "clean"], default="auto",
+                    help="regex = এই file এর extractor, clean = judgement_labels.json")
+    ap.add_argument("--collection", default=COLLECTION_NAME)
+    ap.add_argument("--skip-tests", action="store_true")
+    args = ap.parse_args()
+
+    col = build_judgements_collection(args.text, args.labels, args.collection)
+    if args.skip_tests:
+        raise SystemExit(0)
 
     print("\n" + "=" * 60)
     print("🧪 Search tests:")
