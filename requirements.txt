@@ -27,5 +27,10 @@ requests>=2.31.0
 beautifulsoup4>=4.12.0
 PyPDF2>=3.0.0
 
+# PDF extraction cascade (ingestion/pdf_extract.py) — also needs the Tesseract binary + ben/eng data
+pymupdf>=1.24.0
+pdfplumber>=0.11.0
+pytesseract>=0.3.10
+
 # Eval / tests
 pytest>=8.0.0

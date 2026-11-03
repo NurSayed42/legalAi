@@ -10,6 +10,14 @@ judgements_clean.json
 judgement_labels.json
 judgement_subjects.jsonl
 
+# Raw PDFs, re-extracted text, OCR models (Phase 1)
+downloaded_pdfs/
+pdf_links.txt
+text_v2/
+tessdata/
+data_quality/failures.jsonl
+.pytest_cache/
+
 # Vector DB (rebuild with scripts)
 legal_chroma_db/
 
