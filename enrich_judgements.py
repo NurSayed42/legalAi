@@ -17,6 +17,7 @@ Collection টা "<name>__building" এ তৈরি হয়, শেষ হ�
 """
 
 import argparse
+import csv
 import json
 import os
 import re
@@ -34,6 +35,9 @@ JUDGEMENTS_FILE = "./judgements.json"
 # case_no/case_type, LLM subject label, text_quality
 CLEAN_FILE      = "./judgements_clean.json"
 LABELS_FILE     = "./judgement_labels.json"
+# ingestion/pdf_extract.py এর re-extracted text (Phase 1) আর তার audit
+TEXT_V2_DIR     = "./text_v2"
+AUDIT_V2_FILE   = "./data_quality/audit_v2.csv"
 CHROMA_DB_PATH  = os.getenv("CHROMA_DB_PATH", "./legal_chroma_db")   # api_v3.py এর সাথে একই path
 COLLECTION_NAME = "bangladesh_judgements"
 EMBED_MODEL     = "paraphrase-multilingual-MiniLM-L12-v2"
@@ -198,15 +202,27 @@ def build_judgements_collection(text_source: str = "auto", label_source: str = "
         text_source = "clean" if os.path.exists(CLEAN_FILE) else "raw"
     if label_source == "auto":
         label_source = "clean" if os.path.exists(LABELS_FILE) else "regex"
-    source = CLEAN_FILE if text_source == "clean" else JUDGEMENTS_FILE
-    print(f"📂 {source} load করছি...")
-    with open(source, encoding="utf-8") as f:
-        judgements = json.load(f)
+    if text_source == "v2":
+        print(f"📂 {TEXT_V2_DIR}/*.txt load করছি...")
+        judgements = [
+            {"filename": name[:-4] + ".pdf", "text": open(os.path.join(TEXT_V2_DIR, name), encoding="utf-8").read()}
+            for name in sorted(os.listdir(TEXT_V2_DIR)) if name.endswith(".txt")
+        ]
+    else:
+        source = CLEAN_FILE if text_source == "clean" else JUDGEMENTS_FILE
+        print(f"📂 {source} load করছি...")
+        with open(source, encoding="utf-8") as f:
+            judgements = json.load(f)
     labels = {}
     if label_source == "clean":
         with open(LABELS_FILE, encoding="utf-8") as f:
             labels = json.load(f)
         print(f"🏷️  {LABELS_FILE} থেকে {len(labels)} টা judgement এর cleaned label")
+    # v2 text এর quality নিজের audit থেকে — v1 label এর 'legacy_bangla_font' OCR এর পরে আর সত্য না
+    v2_quality = {}
+    if text_source == "v2" and os.path.exists(AUDIT_V2_FILE):
+        with open(AUDIT_V2_FILE, encoding="utf-8") as f:
+            v2_quality = {row["filename"]: row["bucket"] for row in csv.DictReader(f)}
     print(f"✅ {len(judgements)} টা judgement পেলাম → {collection_name} (text={text_source}, labels={label_source})\n")
 
     print("🤖 Embedding model load করছি...")
@@ -248,7 +264,7 @@ def build_judgements_collection(text_source: str = "auto", label_source: str = "
             "outcome":     outcome,
             "judges":      judges,
             "subjects":    subjects,
-            "text_quality": label.get("text_quality", "ok"),
+            "text_quality": v2_quality.get(filename) or label.get("text_quality", "ok"),
             "source_type": "judgement",
         }
 
@@ -314,8 +330,9 @@ def test_search(collection, query: str, filters: dict = None):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--text", choices=["auto", "raw", "clean"], default="auto",
-                    help="raw = judgements.json, clean = clean_metadata.py এর judgements_clean.json")
+    ap.add_argument("--text", choices=["auto", "raw", "clean", "v2"], default="auto",
+                    help="raw = judgements.json, clean = clean_metadata.py এর judgements_clean.json, "
+                         "v2 = ingestion/pdf_extract.py এর text_v2/")
     ap.add_argument("--labels", choices=["auto", "regex", "clean"], default="auto",
                     help="regex = এই file এর extractor, clean = judgement_labels.json")
     ap.add_argument("--collection", default=COLLECTION_NAME)

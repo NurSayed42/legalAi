@@ -177,15 +177,23 @@ def main():
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) // 2))
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--force", action="store_true", help="আগে থেকে থাকা .txt আবার তৈরি করো")
+    ap.add_argument("--retry-failed", action="store_true", help="failures.jsonl এ থাকা file আবার চেষ্টা করো")
+    ap.add_argument("--settle-seconds", type=int, default=30,
+                    help="এর চেয়ে নতুন PDF বাদ — download চলাকালীন আধা-লেখা file না পড়তে")
     args = ap.parse_args()
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     failures_path = ROOT / "data_quality" / "failures.jsonl"
     failures_path.parent.mkdir(parents=True, exist_ok=True)
+    failed_before = set()
+    if failures_path.exists() and not args.retry_failed:
+        failed_before = {json.loads(line)["filename"] for line in failures_path.read_text(encoding="utf-8").splitlines()
+                         if line.strip()}
 
-    pdfs = sorted(Path(args.pdf_dir).glob("*.pdf"))
-    todo = [p for p in pdfs if args.force or not (out_dir / f"{p.stem}.txt").exists()]
+    cutoff = time.time() - args.settle_seconds
+    pdfs = sorted(p for p in Path(args.pdf_dir).glob("*.pdf") if p.stat().st_mtime < cutoff)
+    todo = [p for p in pdfs if (args.force or not (out_dir / f"{p.stem}.txt").exists()) and p.name not in failed_before]
     if args.limit:
         todo = todo[:args.limit]
     print(f"{len(pdfs)} PDF, {len(pdfs) - len(todo)} আগেই হয়েছে, {len(todo)} বাকি — {args.workers} worker")
