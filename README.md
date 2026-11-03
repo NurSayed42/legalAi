@@ -32,8 +32,11 @@ This project builds a legal research assistant that treats *trustworthiness* as 
 
 **Scraping approach:** `requests` + `BeautifulSoup` to walk the judgement listing pages and collect PDF links (paginated, with retry + resume-from-existing-file support so re-runs don't re-download), then `PyPDF2` to extract raw text from each downloaded PDF (`extract_text.py`). Law pages are scraped directly as HTML (act-details pages), with footnote markers and superscripts stripped during cleaning.
 
+**Text quality** (`ingestion/quality_audit.py`, details in `evals/reports/phase1_data_quality.md`): of the 8,615 PyPDF2 texts, 43.8% are good, 23.2% suspect (split words such as `DIVISIO N`) and 33.0% broken.
+
 **Known data gaps:**
-- ~2,400 judgements (mostly s.498 bail and s.561A quashing orders) are Bangla typeset in a legacy Bijoy/SutonnyMJ font. `PyPDF2` extracts them as ASCII mojibake (`q¡C−L¡VÑ` = "হাইকোর্ট"). They are flagged `text_quality=legacy_bangla_font`, not converted; the reranker filters them out of answers.
+- ~2,800 judgements (mostly s.498 bail and s.561A quashing orders) contain Bangla typeset in legacy fonts (AdarshaLipi, SutonnyMJ). `PyPDF2` extracts it as ASCII mojibake (`q¡C−L¡VÑ` = "হাইকোর্ট"). The new extraction cascade (`ingestion/pdf_extract.py`: PyMuPDF → pdfplumber → Tesseract `ben+eng`) fixes this on a test sample, but hasn't been run on the full corpus yet because the PDFs need re-downloading.
+- PDFs with no text layer were silently dropped by `extract_text.py`, so image-only scans are missing from the corpus.
 - Not in the scraped laws corpus: NI Act s.138A, the Bangladesh Labour Act 2006, the Premises Rent Control Act 1991.
 
 ---
@@ -187,8 +190,12 @@ api_v3.py                 # FastAPI app + LangGraph pipeline (current)
 legal_rules.py            # Alias dictionary, intent rules, persona check, answer schema
 api_v2.py                 # Previous API version
 legal_ui_v2.html          # Single-file web UI for the API
+ingestion/                # quality_audit.py (text quality buckets), pdf_extract.py (extraction cascade)
+data_quality/             # audit.csv + summaries
 evals/                    # run_eval.py, reports/
 tests/                    # test_rules.py (offline), test_regression.py (live server)
+docs/DECISIONS.md         # assumptions and design decisions
+SPEC.md                   # upgrade plan (phases 1–8)
 requirements.txt
 .env.example
 ```
