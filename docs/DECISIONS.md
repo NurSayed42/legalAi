@@ -34,6 +34,30 @@ The laws collection is not exactly the original: on 2026-10-27 `clean_metadata.p
 
 **D-103 — OCR trigger is "page fails the quality check", not only "page has no text".** SPEC Phase 1.4 says OCR only for pages with no extractable text. Legacy-font pages *do* have extractable text — it's mojibake — so that rule would leave all ~2,800 legacy-font files broken. The cascade OCRs a page when its text is empty **or** the page fails the same legacy-font/garbage checks as the audit.
 
+**D-107 — The `BrokenProcessPool` of 2026-11-04 04:39:37: what the evidence shows.** The full run stopped with 5,466 of 5,724 files done in its last pass. Evidence, from the Windows event logs and `phase1_run.log`:
+- no Application Error, WER report or crash dump for `python.exe`/`tesseract.exe` in that window, so no native crash;
+- no Resource-Exhaustion-Detector event in 30 days, and a worker peaks at ~106 MB, so memory exhaustion is unlikely (not strictly excluded: the pagefile's peak counter resets on reboot);
+- `run_phase1.py` should have logged a line right after the failed pass and didn't, so it died at the same moment as the workers: a whole-tree termination, not one worker crashing;
+- keyboard activity at 04:37:35, power source changes at 04:37:29 and 04:38:25, a user-mode `SetSuspendState` call at 04:39:40, three seconds after the traceback, then hibernation until 10:31.
+
+Most likely the process tree was killed when the session closed, just before the laptop was put to sleep. What exactly closed it can't be proven from these logs. It doesn't change the fix: whatever the trigger, the code should have survived it.
+
+**D-108 — Recovery design.** Defects found in the extraction code, and their fixes:
+- one dead worker ended the whole pass → workers run in short-lived batches; unfinished units are retried alone; a unit that kills its worker twice alone goes to `failures.jsonl` and the run continues;
+- no checkpoint inside a file → PDFs over 200 pages save every 50 pages to `text_v2_parts/`, atomically;
+- non-atomic `.txt` writes and existence-only resume → temp + fsync + rename; an output counts only with a manifest row and a matching character count; anything else is moved to `data_quality/quarantine/`, never deleted;
+- buffered manifest → each row is flushed and fsynced;
+- no OCR timeout, PDFs never closed → 300 s per OCR call, 1 h stall detection, `doc.close()`;
+- **`run_phase1.py` ignored return codes, so a failed extraction would have gone straight on to the audit and a v2 build from incomplete text** → a gate requires a validated output for all 8,615 PDFs. It reads the disk, not a progress counter.
+
+`--force` was removed from `pdf_extract.py` (it overwrote outputs), and `enrich_judgements.py` now refuses to replace an existing collection without `--allow-replace`; its default target is v1. `ingestion/integrity.py` records SHA-256 of outputs and a logical fingerprint of the v1/laws collections (ids, metadata, documents, nearest neighbours of fixed vectors). HNSW file hashes are deliberately not compared, because Chroma can flush its WAL into them on open without any content change.
+
+**D-109 — 2 workers.** RAM wasn't the cause of the crash, but only ~1 GB is typically available on this 7.7 GB laptop, and a worker plus its Tesseract process needs a few hundred MB. Below 1 GB available a batch runs with 1 worker; below 400 MB it waits first (`low_ram_mb`, `critical_ram_mb`). Measured on an idle machine: full-page OCR 1.33 s/page, against 3.78 s/page under the contention of the first run.
+
+**D-110 — Death Reference 58/2013 dominates the corpus.** This judgement is split across PDFs of 11,407, 16,560 and 1,100 pages. Parts 1 and 2 alone were 9,996 of 45,571 v1 chunks (22%) and 24% of all words. They're extracted and indexed like everything else here, because dropping or capping them is a retrieval decision that needs numbers. To be measured in Phase 3: without a per-case cap, one case can fill the top-k.
+
+**D-111 — The 8,357 existing outputs were kept as they are.** Two known small inconsistencies, not worth overwriting verified outputs for: 9 files have extra `\f` characters from the PDF text layer, so splitting them on `\f` gives more parts than pages (manifest page counts match the PDFs for all 8,357; new extractions strip these codes); and 7 of the original test sample predate the D-105 control-code rule (their audit shows no control-code problem).
+
 **D-105 — Unreadable spans include fonts embedded without a character map.** Two sample files had Bangla in `Vrinda` (a Unicode font) embedded without ToUnicode, so the text layer returns glyph ids (`\x01\x02\x03`). A span counts as unreadable — and is OCR'd — if its font is a known legacy font, if > 30% of it is control codes, or if > 10% of its letters are legacy-font mojibake characters.
 
 **D-106 — OCR settings.** 200 dpi, `ben+eng`, Tesseract `tessdata` (standard) models. 200 dpi was faster than 300 (3.7 s vs 6.3 s per page) and produced less junk on the probe page. Known issue: `ben+eng` inserts Latin junk into Bangla text; to be tested: `ben`-only OCR of the unreadable spans, and `tessdata_best`.
