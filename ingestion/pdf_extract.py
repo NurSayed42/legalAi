@@ -68,6 +68,10 @@ CONFIG = {
     # Default এ Tesseract বাংলার কিছু লাইনকে "noise" ধরে চুপচাপ ফেলে দেয় — Death Ref 58 এ প্রতি ৬ লাইনে
     # ১টা হারিয়েছিল, কোনো error ছাড়া (docs/DECISIONS.md D-114)। এই দুইটা flag এ 179/179 লাইন থাকে।
     "ocr_config": "-c textord_noise_rejrows=0 -c textord_noise_rejwords=0",
+    # টাইট এক-লাইনের crop এ default layout mode কখনো কিছুই ফেরত দেয় না (S48 p118: ১২ token এর লাইন → ফাঁকা)।
+    # 116 block: ফাঁকা এক-লাইন 3/57 → 0/57, full-page এর সাথে মিল 87.2% → 93.2%, গতি একই (D-118)।
+    "ocr_block_config": "--psm 6",
+    "ocr_block_border_px": 20,      # pad না করে সাদা border, নইলে পাশের লাইন ঢুকে যায় (985 শব্দ বনাম 907)
     "min_page_chars": 20,           # এর কম text থাকলে page "text ছাড়া" ধরা হয়
     "full_page_ocr_share": 0.5,     # legacy-font character এর ভাগ এর বেশি হলে পুরো page OCR
     "span_legacy_char_ratio": 0.1,  # font নাম না মিললেও span এ এত mojibake থাকলে legacy
@@ -216,16 +220,19 @@ def _is_legacy_span(span: dict) -> bool:
     return len(text) >= 5 and len(LEGACY_RE.findall(text)) / letters > CONFIG["span_legacy_char_ratio"]
 
 
-def _ocr_image(img) -> str:
+def _ocr_image(img, extra_config: str = "") -> str:
     import pytesseract
-    return pytesseract.image_to_string(img, lang=CONFIG["ocr_lang"], config=CONFIG["ocr_config"],
-                                       timeout=CONFIG["ocr_timeout_s"])
+    config = f'{CONFIG["ocr_config"]} {extra_config}'.strip()
+    return pytesseract.image_to_string(img, lang=CONFIG["ocr_lang"], config=config, timeout=CONFIG["ocr_timeout_s"])
 
 
 def _ocr_pymupdf(page, clip=None) -> str:
-    from PIL import Image
+    from PIL import Image, ImageOps
     pix = page.get_pixmap(dpi=CONFIG["ocr_dpi"], clip=clip)
-    return _ocr_image(Image.open(io.BytesIO(pix.tobytes("png"))))
+    img = Image.open(io.BytesIO(pix.tobytes("png")))
+    if clip is None:
+        return _ocr_image(img)
+    return _ocr_image(ImageOps.expand(img, border=CONFIG["ocr_block_border_px"], fill="white"), CONFIG["ocr_block_config"])
 
 
 def extract_page_pymupdf(page) -> tuple[str, str, int]:

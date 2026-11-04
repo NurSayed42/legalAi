@@ -333,3 +333,27 @@ def test_ocr_keeps_noise_like_rows(monkeypatch):
     assert pdf_extract._ocr_image(object()) == "text"
     assert "textord_noise_rejrows=0" in seen["config"] and "textord_noise_rejwords=0" in seen["config"]
     assert seen["lang"] == "ben+eng" and seen["timeout"] == pdf_extract.CONFIG["ocr_timeout_s"]
+
+
+def test_block_ocr_uses_border_and_single_block_layout_but_full_page_does_not(monkeypatch):
+    """টাইট এক-লাইনের crop এ default layout কিছুই ফেরত দিতে পারে; দুইটা flag দুই জায়গাতেই থাকা চাই।"""
+    import pytesseract
+    calls = []
+
+    def fake(img, lang, config, timeout):
+        calls.append((img.size, config))
+        return "text"
+
+    monkeypatch.setattr(pytesseract, "image_to_string", fake)
+    doc = pymupdf.open()
+    page = doc.new_page()
+    clip = pymupdf.Rect(72, 72, 272, 92)
+    pdf_extract._ocr_pymupdf(page, clip=clip)
+    pdf_extract._ocr_pymupdf(page)
+    plain = page.get_pixmap(dpi=pdf_extract.CONFIG["ocr_dpi"], clip=clip)
+    doc.close()
+    (block_size, block_config), (_, page_config) = calls
+    border = pdf_extract.CONFIG["ocr_block_border_px"]
+    assert block_size == (plain.width + 2 * border, plain.height + 2 * border)
+    assert "--psm 6" in block_config and "--psm" not in page_config
+    assert all("textord_noise_rejrows=0" in c for _, c in calls)
