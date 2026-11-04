@@ -230,9 +230,11 @@ def retention(pdf_count: int, output_count: int) -> float:
     return min(pdf_count, output_count) / pdf_count if pdf_count else 1.0
 
 
-def audit_retention(text_dir: Path, pdf_dir: Path, pages_out: Path | None = None, progress=None) -> dict:
+def audit_retention(text_dir: Path, pdf_dir: Path, pages_out: Path | None = None, progress=None,
+                    measure_new: bool = False) -> dict:
     """প্রতি file: v2 যে page OCR করেছিল সেগুলোতে লাইন কত থাকল, আর নতুন rule এ কোন page এ OCR বাড়বে। PDF
-    শুধু পড়া হয়, OCR চলে না। Page ধরে মেলে না (ছড়ানো \\f, D-111) এমন file এ পুরো file মিলিয়ে হিসাব।"""
+    শুধু পড়া হয়, OCR চলে না। Page ধরে মেলে না (ছড়ানো \\f, D-111) এমন file এ পুরো file মিলিয়ে হিসাব।
+    measure_new: নতুন rule এ OCR হওয়া page ও মাপে — text_v3 এর জন্য। v2 এর সাথে একই page এ মেলাতে page CSV join করো।"""
     import pymupdf
 
     from ingestion.pdf_extract import page_text_blocks, plan_blocks, read_manifest
@@ -266,9 +268,10 @@ def audit_retention(text_dir: Path, pdf_dir: Path, pages_out: Path | None = None
                     reasons[new.layer_problem] += 1
                 if not aligned:
                     all_pdf += pdf_lines(blocks)
-                if old.method == "pymupdf":
+                measured = new if measure_new else old
+                if measured.method == "pymupdf":
                     continue
-                if old.method == "ocr_page_no_text":   # text layer নেই, তাই হরও নেই; আলাদা গোনা
+                if measured.method == "ocr_page_no_text":   # text layer নেই, তাই হরও নেই; আলাদা গোনা
                     row["no_text_pages"] += 1
                     continue
                 row["ocr_pages"] += 1
@@ -280,7 +283,7 @@ def audit_retention(text_dir: Path, pdf_dir: Path, pages_out: Path | None = None
                 row["kept_lines"] += kept
                 page_retention = retention(n_pdf, n_out)
                 row["low_retention_pages"] += page_retention < min_retention
-                page_rows.append({"filename": name, "page": i, "method": old.method, "pdf_lines": n_pdf,
+                page_rows.append({"filename": name, "page": i, "method": measured.method, "pdf_lines": n_pdf,
                                   "output_lines": n_out, "line_retention": round(page_retention, 4)})
             if not aligned and (row["ocr_pages"] or row["no_text_pages"]):
                 row["retention_level"] = "file"
@@ -445,13 +448,15 @@ def main():
     ap.add_argument("--source", default=str(ROOT / "judgements.json"), help="judgements.json বা .txt folder")
     ap.add_argument("--out", default=str(ROOT / "data_quality" / "audit.csv"))
     ap.add_argument("--pdf-dir", default=None, help="দিলে OCR করা page এ লাইন ধরে রাখার হিসাব করে (--source folder হতে হবে)")
+    ap.add_argument("--measure-new-ocr-pages", action="store_true", help="নতুন rule এ OCR হওয়া page ও মাপো (text_v3)")
     args = ap.parse_args()
 
     out = Path(args.out)
     retention_rows = {}
     if args.pdf_dir:
         retention_rows = audit_retention(Path(args.source), Path(args.pdf_dir),
-                                         out.with_name(out.stem + "_pages.csv"), progress=500)
+                                         out.with_name(out.stem + "_pages.csv"), progress=500,
+                                         measure_new=args.measure_new_ocr_pages)
     rows = []
     for filename, text in load_texts(Path(args.source)):
         row = audit_text(text)

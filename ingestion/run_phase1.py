@@ -101,17 +101,18 @@ def api_is_running() -> bool:
         return s.connect_ex(("127.0.0.1", 8000)) == 0
 
 
-def backup_chroma() -> None:
+def backup_chroma(target: Path | None = None) -> None:
     """পুরো DB এর copy। .partial এ copy করে শেষে rename, তাই অর্ধেক backup কখনো 'সম্পূর্ণ' দেখায় না।"""
-    if CHROMA_BACKUP.exists():
-        log(f"backup আগে থেকেই আছে: {CHROMA_BACKUP.name}")
+    target = target or CHROMA_BACKUP
+    if target.exists():
+        log(f"backup আগে থেকেই আছে: {target.name}")
         return
-    partial = CHROMA_BACKUP.with_name(CHROMA_BACKUP.name + ".partial")
+    partial = target.with_name(target.name + ".partial")
     if partial.exists():
         shutil.rmtree(partial)
-    log(f"Chroma DB backup → {CHROMA_BACKUP.name}")
+    log(f"Chroma DB backup → {target.name}")
     shutil.copytree(CHROMA_DIR, partial)
-    os.replace(partial, CHROMA_BACKUP)
+    os.replace(partial, target)
 
 
 def stop(reason: str, code: int = 2) -> int:

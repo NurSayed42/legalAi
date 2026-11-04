@@ -525,13 +525,17 @@ def output_is_valid(txt_path: Path, row: dict | None) -> tuple[bool, str]:
     return True, ""
 
 
-def inventory(pdf_dir: Path, out_dir: Path, failures_path: Path, settle_seconds: int = 0) -> dict:
-    """Disk দেখে অবস্থা বের করে — কোনো progress counter এর উপর ভরসা না করে। কিছু লেখে না।"""
+def inventory(pdf_dir: Path, out_dir: Path, failures_path: Path, settle_seconds: int = 0,
+              only: set[str] | None = None) -> dict:
+    """Disk দেখে অবস্থা বের করে — কোনো progress counter এর উপর ভরসা না করে। কিছু লেখে না।
+    only দিলে শুধু ওই PDF গুলো (text_v3 এ শুধু তালিকার file আবার OCR হয়)।"""
     manifest = read_manifest(out_dir)
     failed = read_file_failures(failures_path)
     cutoff = time.time() - settle_seconds
     valid, todo, invalid = [], [], {}
     for pdf in sorted(pdf_dir.glob("*.pdf")):
+        if only is not None and pdf.name not in only:
+            continue
         if settle_seconds and pdf.stat().st_mtime >= cutoff:
             continue
         txt = out_dir / f"{pdf.stem}.txt"
@@ -557,7 +561,8 @@ def quarantine(txt_path: Path, quarantine_dir: Path, reason: str, failures_path:
     return target
 
 
-def merge_shards(pdf: Path, n_pages: int, out_dir: Path, parts_dir: Path, shard_size: int) -> bool:
+def merge_shards(pdf: Path, n_pages: int, out_dir: Path, parts_dir: Path, shard_size: int,
+                 extra: dict | None = None) -> bool:
     """সব checkpoint থাকলে এক .txt আর এক manifest row বানায়। না থাকলে False, কিছু লেখে না।"""
     shards = []
     for start, end in shard_ranges(n_pages, shard_size):
@@ -577,7 +582,7 @@ def merge_shards(pdf: Path, n_pages: int, out_dir: Path, parts_dir: Path, shard_
         "failed_pages": [p for data in shards for p in data["failed_pages"]],
         "ocr_blocks": sum(data["ocr_blocks"] for data in shards),
         "seconds": round(sum(data["seconds"] for data in shards), 1),
-        "chars": len(text), "shards": len(shards),
+        "chars": len(text), "shards": len(shards), **(extra or {}),
     })
     return True
 
@@ -586,7 +591,10 @@ def merge_shards(pdf: Path, n_pages: int, out_dir: Path, parts_dir: Path, shard_
 
 def process_all(pdf_dir: Path, out_dir: Path, parts_dir: Path, failures_path: Path, quarantine_dir: Path,
                 workers: int = 2, limit: int = 0, retry_failed: bool = False, settle_seconds: int = 0,
-                runner=None, shard_threshold: int | None = None, shard_size: int | None = None) -> dict:
+                runner=None, shard_threshold: int | None = None, shard_size: int | None = None,
+                only: set[str] | None = None, manifest_extra=None) -> dict:
+    """only: শুধু এই PDF গুলো। manifest_extra(filename) → manifest row এ বাড়তি field (যেমন source_version)।"""
+    extra_for = manifest_extra or (lambda name: {})
     shard_threshold = shard_threshold or CONFIG["shard_threshold_pages"]
     shard_size = shard_size or CONFIG["shard_pages"]
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -596,7 +604,7 @@ def process_all(pdf_dir: Path, out_dir: Path, parts_dir: Path, failures_path: Pa
     repair_jsonl_tail(manifest_path)
     repair_jsonl_tail(failures_path)
 
-    state = inventory(pdf_dir, out_dir, failures_path, settle_seconds)
+    state = inventory(pdf_dir, out_dir, failures_path, settle_seconds, only)
     for name, why in state["invalid"].items():
         target = quarantine(out_dir / f"{Path(name).stem}.txt", quarantine_dir, why, failures_path)
         log(f"⚠️ {name}: {why} → {target}")
@@ -628,7 +636,7 @@ def process_all(pdf_dir: Path, out_dir: Path, parts_dir: Path, failures_path: Pa
 
     def on_file(unit, row):
         if row["ok"]:
-            append_jsonl(manifest_path, row)
+            append_jsonl(manifest_path, {**row, **extra_for(unit.name)})
             record_failed_pages(unit, row)
             methods.update(row["methods"])
             counts["extracted"] += 1
@@ -673,7 +681,7 @@ def process_all(pdf_dir: Path, out_dir: Path, parts_dir: Path, failures_path: Pa
                 log(f"❌ {unit.label}: {row['error']}")
 
         run_units(pending, workers, runner, on_shard, on_gave_up, CONFIG["pool_units_shards"])
-        if merge_shards(pdf, n_pages, out_dir, parts_dir, shard_size):
+        if merge_shards(pdf, n_pages, out_dir, parts_dir, shard_size, extra_for(name)):
             counts["extracted"] += 1
             log(f"✅ {name}: সব shard জোড়া লাগানো হলো")
         else:

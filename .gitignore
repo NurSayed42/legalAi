@@ -15,6 +15,10 @@ downloaded_pdfs/
 pdf_links.txt
 text_v2/
 text_v2_parts/
+text_v3/
+text_v3_parts/
+data_quality/failures_v3.jsonl
+data_quality/quarantine_v3/
 tessdata/
 data_quality/failures.jsonl
 data_quality/backups/
@@ -22,6 +26,7 @@ data_quality/quarantine/
 data_quality/*.lock
 data_quality/*.pid
 legal_chroma_db_backup_pre_v2/
+legal_chroma_db_backup_pre_v3/
 .pytest_cache/
 
 # Vector DB (rebuild with scripts)

@@ -346,6 +346,30 @@ def test_reocr_reasons_cover_each_source_and_skip_good_files():
     assert summarize(list(out.values()))["files"] == 5
 
 
+def test_audit_retention_can_also_measure_pages_only_the_new_rule_ocrs(tmp_path, monkeypatch):
+    """text_v3 এ নতুন rule এ OCR হওয়া page ও মাপা চাই; v2 এর হিসাব তাতে বদলানো চলবে না।"""
+    pdfs, text = tmp_path / "pdfs", tmp_path / "text"
+    pdfs.mkdir()
+    text.mkdir()
+    doc = pymupdf.open()
+    for i in range(10):
+        doc.new_page() if i == 0 else None
+        doc[0].insert_text((72, 72 + i * 20), "a plain text layer line here", fontsize=9)
+    doc.save(pdfs / "a.pdf")
+    doc.close()
+    (text / "a.txt").write_text("\n".join(["বাংলা লাইন"] * 7), encoding="utf-8")
+    (text / "_manifest.jsonl").write_text('{"filename": "a.pdf", "ok": true, "pages": 1, "chars": 1}\n', encoding="utf-8")
+
+    def fake_plan(blocks, check_layer=True):
+        return PagePlan("ocr_page_corrupted" if check_layer else "pymupdf", layer_problem="impossible_spelling" if check_layer else "")
+
+    monkeypatch.setattr(pdf_extract, "plan_blocks", fake_plan)
+    v2_view = audit_retention(text, pdfs)["a.pdf"]
+    assert v2_view["ocr_pages"] == 0 and v2_view["line_retention"] == "" and v2_view["layer_new_ocr_pages"] == 1
+    v3_view = audit_retention(text, pdfs, measure_new=True)["a.pdf"]
+    assert v3_view["ocr_pages"] == 1 and v3_view["pdf_lines"] == 10 and v3_view["line_retention"] == 0.7
+
+
 def test_audit_cli_runs_as_a_script_and_keeps_old_buckets(tmp_path):
     """Script হিসেবে চালালে import path আলাদা — unit test এ এই ভুল ধরা পড়ে না।"""
     import csv
