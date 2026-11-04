@@ -24,7 +24,7 @@ The upgrade plan is in `SPEC.md` (8 phases). Work phase by phase; a phase starts
 - Before re-running or touching extraction, check state with `python ingestion/pdf_extract.py --status` (read-only). `python ingestion/run_phase1.py` is safe to re-run: it skips verified outputs and stops at a gate if text is incomplete.
 - Long jobs die if tied to the session that started them; start them detached and keep the laptop on AC.
 - `enrich_judgements.py` builds into `<collection>__building` and swaps at the end; it refuses to replace an existing collection without `--allow-replace`. `--text raw --labels regex --allow-replace` reproduces the original v1 index. A full rebuild takes ~70 min (≈11 chunks/s).
-- `ingestion/integrity.py verify-chroma --against data_quality/backups/chroma_pre_v2.json` proves whether v1/laws changed.
+- `ingestion/integrity.py verify-chroma --against data_quality/backups/chroma_pre_v2_exact.json` proves whether v1/laws changed (exact vectors, documents, metadata).
 - Gemini free tier: 15 requests/min **per model**. Batch jobs should use a different model than the running API (e.g. `--model gemini-3.1-flash-lite`).
 - The API (`uvicorn api_v3:app --port 8000`) needs ~2.5 min to start (BM25 over ~68K chunks + reranker load) and holds the Chroma DB open — stop it before rebuilding collections.
 - Tests: `python -m pytest tests/test_rules.py tests/test_pdf_extract.py` (offline), `tests/test_regression.py` (needs the server and real LLM calls).

@@ -5,13 +5,13 @@ Recovery এর সময় "কিছু নষ্ট হয়নি" অন�
 
   snapshot-text   text_v2/*.txt এর size + SHA-256, আর _manifest.jsonl এর copy
   verify-text     snapshot এর প্রতিটা file এখনো byte-identical কিনা (নতুন file থাকা ঠিক আছে)
-  snapshot-chroma collection এর id, count, সব id/metadata/document এর hash, আর fixed vector এ
-                  nearest-neighbour ফলাফল
+  snapshot-chroma collection এর id, count, সব id/metadata/document এর hash, আর সব vector এর
+                  exact hash (id অনুযায়ী)
   verify-chroma   উপরেরটার সাথে মেলানো
 
-Chroma তে শুধু read-only SQLite দিয়ে পড়ে। HNSW file এর hash ইচ্ছা করে নেওয়া হয় না — Chroma
-খোলার সময় WAL flush করে সেগুলো লিখতে পারে, content না বদলালেও। তাই vector অংশের প্রমাণ হলো
-একই vector এ একই nearest neighbour।
+HNSW file এর hash নেওয়া হয় না — Chroma খোলার সময় WAL flush করে সেগুলো লিখতে পারে, content না
+বদলালেও। Nearest-neighbour মিলিয়েও দেখা হয় না: approximate search একই DB তে কখনো কখনো ভিন্ন
+ফল দেয়, তাতে মিথ্যা alarm বাজে (docs/DECISIONS.md D-112)। তাই প্রমাণ হলো প্রতিটা vector নিজে।
 
     python ingestion/integrity.py snapshot-text --out data_quality/backups/text_v2_pre_resume.json
     python ingestion/integrity.py verify-chroma --against data_quality/backups/chroma_pre_v2.json
@@ -20,7 +20,6 @@ Chroma তে শুধু read-only SQLite দিয়ে পড়ে। HNSW
 import argparse
 import hashlib
 import json
-import random
 import shutil
 import sqlite3
 import sys
@@ -31,8 +30,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_COLLECTIONS = ["bangladesh_judgements", "bangladesh_laws"]
-PROBE_VECTORS = 5
-EMBED_DIM = 384          # paraphrase-multilingual-MiniLM-L12-v2
+VECTOR_BATCH = 2000
+CHECKED_FIELDS = ("exists", "id", "count", "content_sha256", "vectors_sha256")
 
 
 def _sha256(path: Path) -> str:
@@ -89,13 +88,21 @@ def _collection_rows(db_path: Path, name: str) -> dict:
         con.close()
 
 
-def _probe_neighbours(db_path: Path, name: str) -> list:
+def _vectors_sha256(db_path: Path, name: str) -> str:
+    """সব vector এর exact hash, id এর ক্রমে — retrieval এর ক্রম বা WAL flush এ বদলায় না।"""
     import chromadb
-    rng = random.Random(42)
-    vectors = [[rng.gauss(0, 1) for _ in range(EMBED_DIM)] for _ in range(PROBE_VECTORS)]
+    import numpy as np
     col = chromadb.PersistentClient(path=str(db_path)).get_collection(name)
-    result = col.query(query_embeddings=vectors, n_results=10, include=["distances"])
-    return [[(i, round(d, 4)) for i, d in zip(ids, dists)] for ids, dists in zip(result["ids"], result["distances"])]
+    digests = {}
+    for offset in range(0, col.count(), VECTOR_BATCH):
+        batch = col.get(limit=VECTOR_BATCH, offset=offset, include=["embeddings"])
+        for doc_id, vector in zip(batch["ids"], batch["embeddings"]):
+            digests[doc_id] = hashlib.sha256(np.asarray(vector, dtype="float32").tobytes()).digest()
+    h = hashlib.sha256()
+    for doc_id in sorted(digests):
+        h.update(doc_id.encode("utf-8"))
+        h.update(digests[doc_id])
+    return h.hexdigest()
 
 
 def snapshot_chroma(db_path: Path, out: Path, names: list[str]) -> dict:
@@ -103,10 +110,10 @@ def snapshot_chroma(db_path: Path, out: Path, names: list[str]) -> dict:
     for name in names:
         data[name] = _collection_rows(db_path, name)
         if data[name]["exists"]:
-            data[name]["neighbours"] = _probe_neighbours(db_path, name)
+            data[name]["vectors_sha256"] = _vectors_sha256(db_path, name)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data), encoding="utf-8")
-    return {n: {k: v for k, v in d.items() if k != "neighbours"} for n, d in data.items()}
+    return data
 
 
 def verify_chroma(db_path: Path, snapshot: Path) -> dict:
@@ -114,10 +121,9 @@ def verify_chroma(db_path: Path, snapshot: Path) -> dict:
     report = {"ok": True, "collections": {}}
     for name, before in recorded.items():
         now = _collection_rows(db_path, name)
-        checks = {key: now.get(key) == before.get(key) for key in ("exists", "id", "count", "content_sha256")}
-        if before.get("exists") and now.get("exists"):
-            probe = json.loads(json.dumps(_probe_neighbours(db_path, name)))
-            checks["neighbours"] = probe == before["neighbours"]
+        if now.get("exists"):
+            now["vectors_sha256"] = _vectors_sha256(db_path, name)
+        checks = {key: now.get(key) == before.get(key) for key in CHECKED_FIELDS}
         report["collections"][name] = {"chunks": now.get("count"), **checks}
         report["ok"] = report["ok"] and all(checks.values())
     return report

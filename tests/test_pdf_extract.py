@@ -279,3 +279,42 @@ def test_text_snapshot_detects_changed_and_missing_files(tmp_path):
     (text_dir / "b.txt").unlink()
     result = integrity.verify_text(text_dir, snap)
     assert not result["ok"] and result["changed"] == ["a.txt"] and result["missing"] == ["b.txt"]
+
+
+def _small_collection(db_path: Path):
+    import chromadb
+    col = chromadb.PersistentClient(path=str(db_path)).get_or_create_collection("guarded", metadata={"hnsw:space": "cosine"})
+    col.upsert(ids=[f"d{i}" for i in range(20)], documents=[f"text {i}" for i in range(20)],
+               metadatas=[{"n": i} for i in range(20)], embeddings=[[float(i + 1), 1.0, 2.0, 3.0] for i in range(20)])
+    return col
+
+
+def test_chroma_verify_passes_when_untouched_and_catches_any_change(tmp_path):
+    db = tmp_path / "db"
+    col = _small_collection(db)
+    snap = tmp_path / "snap.json"
+    integrity.snapshot_chroma(db, snap, ["guarded"])
+    assert integrity.verify_chroma(db, snap)["ok"]
+
+    col.upsert(ids=["d3"], documents=["text 3"], metadatas=[{"n": 3}], embeddings=[[4.0, 1.0, 2.0, 3.5]])
+    result = integrity.verify_chroma(db, snap)["collections"]["guarded"]
+    assert result["vectors_sha256"] is False and result["content_sha256"] is True
+
+    col.upsert(ids=["d3"], documents=["changed text"], metadatas=[{"n": 3}], embeddings=[[4.0, 1.0, 2.0, 3.0]])
+    result = integrity.verify_chroma(db, snap)["collections"]["guarded"]
+    assert result["content_sha256"] is False and result["vectors_sha256"] is True
+
+    col.delete(ids=["d0"])
+    assert not integrity.verify_chroma(db, snap)["ok"]
+
+
+def test_chroma_verify_fails_on_old_baseline_without_vector_hash(tmp_path):
+    """পুরনো baseline এ vector hash নেই — চুপচাপ পাস না করে fail করবে।"""
+    db = tmp_path / "db"
+    _small_collection(db)
+    snap = tmp_path / "snap.json"
+    integrity.snapshot_chroma(db, snap, ["guarded"])
+    data = json.loads(snap.read_text(encoding="utf-8"))
+    del data["guarded"]["vectors_sha256"]
+    snap.write_text(json.dumps(data), encoding="utf-8")
+    assert not integrity.verify_chroma(db, snap)["ok"]
