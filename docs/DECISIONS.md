@@ -34,6 +34,34 @@ The laws collection is not exactly the original: on 2026-10-27 `clean_metadata.p
 
 **D-103 — OCR trigger is "page fails the quality check", not only "page has no text".** SPEC Phase 1.4 says OCR only for pages with no extractable text. Legacy-font pages *do* have extractable text — it's mojibake — so that rule would leave all ~2,800 legacy-font files broken. The cascade OCRs a page when its text is empty **or** the page fails the same legacy-font/garbage checks as the audit.
 
+**D-121 — Corrupted layers are OCRed block by block, with the language chosen per block.** `ben+eng` turns italic Bangla into Latin junk (`প্রতিষ্ঠানের` became `TOMA`), and `ben` alone destroys English (`ছঘদ81160 006 8০০৮৪০0`), so no single setting works for a page. `eng+ben` gives the same output as `ben+eng`. English letters survive in a corrupted layer, so the layer shows which blocks contain English: a block with no Latin word of 3+ letters uses `ben`, and the rest keep `ben+eng`. Clean English blocks stay as exact text, so these pages no longer go to full-page OCR.
+
+| 14 real corrupted pages | Old route | New route |
+|---|---|---|
+| Bangla words | 1,576 | **1,641** |
+| English words from the layer kept | 655 of 656 | 655 of 656 |
+| Lines | 339 | 339 |
+| Seconds per page | 8.5 | 6.6 |
+
+On clean upright text with known source, recall falls slightly, from 93.6% to 92.0%. The output is still imperfect on italic Bangla (`এতোক শিহ্ষা গাতিষরানের` for `প্রত্যেক শিক্ষা প্রতিষ্ঠানের`), though it's now recognisably Bangla. An italic test with known source wasn't possible, because Nirmala UI has no italic face. Legacy-font layers can't use this, because their mojibake looks like Latin, so full-page legacy OCR keeps `ben+eng` and its Latin junk (the issue in D-106).
+
+**D-120 — v3 caps a case at 400 chunks.** Death Ref 58 has 8,988 chunks in v2; the next-largest case has 354, and the 99th percentile is 26. The cap is an integer in `ingestion/chunk_cap.py`, and the three PDFs of this case count as one case. Each PDF keeps its first and last 5 chunks (header and final order); the rest are evenly spaced. Selection comes from the text alone, so verification recomputes the exact ids. v1 and v2 builds are unaffected.
+
+Chosen by simulation (`evals/cap_simulation.py`): exact search over v2's real vectors with chunks removed, at 5 sampling offsets, because which chunks land in the sample moves the result a lot. Own-topic queries were fixed before any results were seen, because a cap can hide this case from the questions it's the right answer to.
+
+| Cap | Other Bangla topics: Death Ref slots of 90 | Worst single case in a top-10 | Distinct documents of 90 | Own topic: queries finding it, of 6 |
+|---|---|---|---|---|
+| None | 58 | 10 | 38 | 6 |
+| 1000 | 22–34 | 7 | 60–73 | 5–6 |
+| 500 | 10–24 | 3–6 | 71–83 | 4–5 |
+| **400** | **5–14** | **2–4** | **79–87** | **3–5** |
+| 300 | 2–14 | 2–5 | 79–88 | 3–5 |
+| 100 | 0–6 | 2 | 87–88 | 2–3 |
+
+400 is where swamping drops sharply without losing more own-topic recall than 300, and it sits above every other case, so in practice only this case is capped. **The cost is real:** about 95% of this case's chunks aren't vector-searchable, and some questions about it will no longer find it. The full text stays in `text_v3/`. Down-weighting at query time would keep everything searchable but means changing retrieval, so that's a Phase 3 question. These numbers are from v2's vectors; v3 has to be measured itself.
+
+The retrieval test had 5 Bangla queries. 5 more were added before v3 existed, so the Bangla test now has 10.
+
 **D-119 — What gets re-OCRed (list built; the run needs approval).** `data_quality/reocr_list.csv`, from `ingestion/reocr_list.py`: **453 files, 25,753 pages**. A file can have several reasons: low retention 253, corrupted text layer 197, corrupted saved text 8, the earlier list of 24, Death Ref 58 parts 2 and 3. Files on the list keep 85.9% of their lines; files off it keep 99.0%. Estimated 5.8 h at 2 workers, from v2's recorded per-file seconds (4.4 h of that is Death Ref 58).
 
 Left out on purpose:
@@ -71,7 +99,7 @@ The detector (`quality_audit.py`; thresholds in `BANGLA_CHECK`) measures reassem
 
 Rejected: vowel-sign density (it flagged clean phrases such as `অর্থ আইন, ১৯৯৩ (১৯৯৩ সনের ১৮ নং আইন)`) and vocabulary hit rate (clean OCR pages go as low as 25%, overlapping corrupted files, whose median is 31%).
 
-On a text layer, one impossible token can flag a page, because some files scatter a few corrupted words across pages and a false flag only costs one block of OCR. Flagged blocks that contain Bangla go to OCR, or the whole page if they are over half of it. In saved text the bar is higher, because OCR noise on a handful of tokens would otherwise flag clean files: 10 tokens for a whole file, 20 for one page.
+On a text layer, one impossible token can flag a page, because some files scatter a few corrupted words across pages and a false flag only costs one block of OCR. Flagged blocks that contain Bangla go to OCR (D-121). In saved text the bar is higher, because OCR noise on a handful of tokens would otherwise flag clean files: 10 tokens for a whole file, 20 for one page.
 
 Results (`data_quality/bangla_detector_eval.json`, `corrupted_bangla_handcheck.csv`):
 
