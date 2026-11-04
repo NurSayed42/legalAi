@@ -9,11 +9,12 @@ Metadata per judgement:
   outcome, judges (partial), subject_keywords, word_count
 
     python enrich_judgements.py                                   # cleaned text/labels থাকলে সেগুলো
-    python enrich_judgements.py --text raw --labels regex         # আসল v1 baseline index
-    python enrich_judgements.py --collection bangladesh_judgements_v2
+    python enrich_judgements.py --text raw --labels regex --allow-replace   # আসল v1 baseline index
+    python enrich_judgements.py --text v2 --labels clean --collection bangladesh_judgements_v2
 
 Collection টা "<name>__building" এ তৈরি হয়, শেষ হলে তবেই পুরনোটার জায়গা নেয় — মাঝপথে বন্ধ
-হলে চালু index নষ্ট হয় না, আবার চালালে যেখানে থেমেছিল সেখান থেকে চলে।
+হলে চালু index নষ্ট হয় না, আবার চালালে যেখানে থেমেছিল সেখান থেকে চলে। আগে থেকে থাকা collection
+--allow-replace ছাড়া বদলায় না (default নাম v1 এর, ভুল command এ baseline মুছে যেতে পারত)।
 """
 
 import argparse
@@ -197,7 +198,12 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE,
 # ─── MAIN ─────────────────────────────────────────────────
 
 def build_judgements_collection(text_source: str = "auto", label_source: str = "auto",
-                                collection_name: str = COLLECTION_NAME):
+                                collection_name: str = COLLECTION_NAME, allow_replace: bool = False):
+    client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+    existing = [c if isinstance(c, str) else c.name for c in client.list_collections()]
+    if collection_name in existing and not allow_replace:
+        raise SystemExit(f"{collection_name} আগে থেকেই আছে — বদলাতে চাইলে --allow-replace দিন")
+
     if text_source == "auto":
         text_source = "clean" if os.path.exists(CLEAN_FILE) else "raw"
     if label_source == "auto":
@@ -230,7 +236,6 @@ def build_judgements_collection(text_source: str = "auto", label_source: str = "
         model_name=EMBED_MODEL
     )
 
-    client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
     building_name = f"{collection_name}__building"
     collection = client.get_or_create_collection(
         name=building_name,
@@ -277,11 +282,17 @@ def build_judgements_collection(text_source: str = "auto", label_source: str = "
             all_ids.append(doc_id)
             all_metas.append(meta)
 
+    del judgements, labels, v2_quality   # 7.7 GB RAM এ embedding এর আগে পুরো corpus এর দ্বিতীয় copy ছেড়ে দাও
     print(f"\n📊 মোট {len(all_docs)} টা chunk তৈরি হলো")
 
     # আগের অসম্পূর্ণ run এর chunk গুলো আবার embed না করে সেখান থেকে চালাও (একই ক্রমে add হয়)
     resume_from = collection.count() // BATCH_SIZE * BATCH_SIZE
     if resume_from:
+        # text বদলে গেলে ক্রমও বদলায়, তখন count দিয়ে resume করলে chunk বাদ পড়ত
+        probe = all_ids[resume_from - 1] if resume_from <= len(all_ids) else None
+        if probe is None or not collection.get(ids=[probe], include=[])["ids"]:
+            raise SystemExit(f"{building_name} এর chunk এই text এর সাথে মেলে না — আগের build অন্য text থেকে; "
+                             f"collection টা দেখে নিয়ে সিদ্ধান্ত নিন")
         print(f"↩️  {building_name} এ আগের run এর {resume_from} টা chunk আছে — সেখান থেকে চলছে")
 
     print("\n💾 ChromaDB তে store করছি...")
@@ -336,10 +347,11 @@ if __name__ == "__main__":
     ap.add_argument("--labels", choices=["auto", "regex", "clean"], default="auto",
                     help="regex = এই file এর extractor, clean = judgement_labels.json")
     ap.add_argument("--collection", default=COLLECTION_NAME)
+    ap.add_argument("--allow-replace", action="store_true", help="আগে থেকে থাকা collection প্রতিস্থাপন করতে দাও")
     ap.add_argument("--skip-tests", action="store_true")
     args = ap.parse_args()
 
-    col = build_judgements_collection(args.text, args.labels, args.collection)
+    col = build_judgements_collection(args.text, args.labels, args.collection, args.allow_replace)
     if args.skip_tests:
         raise SystemExit(0)
 
