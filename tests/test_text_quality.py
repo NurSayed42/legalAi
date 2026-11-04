@@ -344,3 +344,28 @@ def test_reocr_reasons_cover_each_source_and_skip_good_files():
     assert out["saved.pdf"]["reasons"] == "corrupted_saved_text"
     assert out["layer.pdf"]["est_seconds_one_worker"] > out["saved.pdf"]["est_seconds_one_worker"], "নতুন OCR এর সময় যোগ হয়"
     assert summarize(list(out.values()))["files"] == 5
+
+
+def test_audit_cli_runs_as_a_script_and_keeps_old_buckets(tmp_path):
+    """Script হিসেবে চালালে import path আলাদা — unit test এ এই ভুল ধরা পড়ে না।"""
+    import csv
+    import json
+    import subprocess
+
+    pdfs, text = tmp_path / "pdfs", tmp_path / "text"
+    pdfs.mkdir()
+    text.mkdir()
+    _legacy_pdf(pdfs / "a.pdf", [10, 10])
+    (text / "a.txt").write_text("\n".join(["বাংলা লাইন"] * 10) + "\f" + "\n".join(["বাংলা লাইন"] * 7), encoding="utf-8")
+    (text / "_manifest.jsonl").write_text('{"filename": "a.pdf", "ok": true, "pages": 2, "chars": 1}\n', encoding="utf-8")
+    out = tmp_path / "audit.csv"
+    root = Path(__file__).resolve().parent.parent
+    done = subprocess.run([sys.executable, str(root / "ingestion" / "quality_audit.py"), "--source", str(text),
+                           "--pdf-dir", str(pdfs), "--out", str(out)], capture_output=True, text=True,
+                          encoding="utf-8", env={**__import__("os").environ, "PYTHONIOENCODING": "utf-8"}, cwd=tmp_path)
+    assert done.returncode == 0, done.stderr
+    row = next(csv.DictReader(out.open(encoding="utf-8")))
+    assert row["line_retention"] == "0.85" and "low_line_retention" in row["reasons"] and row["bucket_old"]
+    summary = json.loads((tmp_path / "audit_summary.json").read_text(encoding="utf-8"))
+    assert summary["retention"]["files_below"]["0.95"] == 1 and "buckets_old_rules" in summary
+    assert (tmp_path / "audit_pages.csv").exists()
