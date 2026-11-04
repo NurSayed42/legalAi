@@ -59,8 +59,8 @@ THRESHOLDS = {
 
 # সব মান পরিষ্কার text আর হাতে দেখা নষ্ট file মেপে বসানো; মাপগুলো docs/DECISIONS.md D-117 এ
 BANGLA_CHECK = {
-    "bad_token_ratio": 0.10,        # পরিষ্কার OCR page এ সর্বোচ্চ 9.3%, হাতে দেখা নষ্ট file এ সর্বনিম্ন 13%
-    "isolated_letter_ratio": 0.4,   # পরিষ্কার text এ সর্বোচ্চ 0.28, হাতে দেখা lossy file এ সর্বনিম্ন 0.56
+    "bad_token_ratio": 0.10,        # পরিষ্কার text এ <7%; 16,649 OCR page এর ৩টা 10–15%। হাতে দেখা নষ্ট file এ সর্বনিম্ন 13%
+    "isolated_letter_ratio": 0.4,   # পরিষ্কার text (20+ token) এ সর্বোচ্চ 0.25, হাতে দেখা lossy file এ সর্বনিম্ন 0.50
     # text layer এর page: ভুল হলে শুধু একটা block OCR হয়, ক্ষতি সামান্য। অসম্ভব বানানের জন্য এক token ই যথেষ্ট,
     # কারণ অনেক file এ অল্প অল্প নষ্ট বাংলা কয়েক page এ ছড়ানো থাকে (S14: ৩ page এ ১৫ token)
     "min_tokens_layer_bad": 1,

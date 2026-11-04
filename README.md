@@ -34,18 +34,20 @@ This project builds a legal research assistant that treats *trustworthiness* as 
 
 **Text quality:** all 8,615 PDFs were re-extracted with a cascade (`ingestion/pdf_extract.py`: PyMuPDF → pdfplumber → Tesseract `ben+eng`), turning Bangla that `PyPDF2` read as mojibake (`q¡C−L¡VÑ` = "হাইকোর্ট") into real text. 59.7% of pages come from the text layer and 40.3% needed some OCR. The full report is [`data_quality/phase1_data_quality.md`](data_quality/phase1_data_quality.md).
 
-| Audit bucket | v1 (`PyPDF2`) | v2 (cascade) |
-|---|---|---|
-| good | 43.8% | 80.7% |
-| suspect | 23.2% | 19.1% |
-| broken | 33.0% | 0.2% |
+| Audit bucket | v1 (`PyPDF2`) | v2 (cascade) | v2, strict rules |
+|---|---|---|---|
+| good | 43.8% | 80.7% | 76.5% |
+| suspect | 23.2% | 19.1% | 23.0% |
+| broken | 33.0% | 0.2% | 0.5% |
+
+The strict rules add lost OCR lines and corrupted Bangla. v1 wasn't measured on them.
 
 Indexes: `bangladesh_judgements` (v1, 45,571 chunks, used by the API) and `bangladesh_judgements_v2` (42,762 chunks, not used by the API yet).
 
 **Known data gaps:**
-- **OCR dropped text lines in v2**, about 17% on Death Reference 58/2013 part 2. The fix is in the code, but those files haven't been re-extracted.
+- **OCR dropped text lines in v2:** Death Reference 58/2013 part 2 keeps 84.3% of its lines, and 253 files are below 95%. The fix is in the code, but those files haven't been re-extracted.
 - **One case dominates:** Death Reference 58/2013 is 21% of v2's chunks and swamps Bangla vector search. A per-document cap is needed before the API moves to v2.
-- 62 files have corrupted Bangla text layers (`ǯদওয়ানী আদালেত ɛিতকার`) that remain unreadable in v2.
+- **Corrupted Bangla text layers** (`ǯদওয়ানী আদালেত ɛিতকার`) remain unreadable in v2 in 197 files (540 pages). The audit now detects them, and the extractor sends them to OCR.
 - 133 extra files have text identical to another file, and 10 PDFs contain each page 2–3 times.
 - PDFs with no text layer at all were dropped by `extract_text.py` and are still missing from the corpus.
 - Not in the scraped laws corpus: NI Act s.138A, the Bangladesh Labour Act 2006, the Premises Rent Control Act 1991.

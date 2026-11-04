@@ -34,15 +34,72 @@ The laws collection is not exactly the original: on 2026-10-27 `clean_metadata.p
 
 **D-103 — OCR trigger is "page fails the quality check", not only "page has no text".** SPEC Phase 1.4 says OCR only for pages with no extractable text. Legacy-font pages *do* have extractable text — it's mojibake — so that rule would leave all ~2,800 legacy-font files broken. The cascade OCRs a page when its text is empty **or** the page fails the same legacy-font/garbage checks as the audit.
 
+**D-119 — What gets re-OCRed (list built; the run needs approval).** `data_quality/reocr_list.csv`, from `ingestion/reocr_list.py`: **453 files, 25,753 pages**. A file can have several reasons: low retention 253, corrupted text layer 197, corrupted saved text 8, the earlier list of 24, Death Ref 58 parts 2 and 3. Files on the list keep 85.9% of their lines; files off it keep 99.0%. Estimated 5.8 h at 2 workers, from v2's recorded per-file seconds (4.4 h of that is Death Ref 58).
+
+Left out on purpose:
+- *3,789 other files with OCR* (12.4 CPU-hours, 6.2 h at 2 workers). In a sample of 40, re-extraction gained 1.0% more words. They can be added if a uniform v3 is worth the time.
+- *Death Ref 58 part 1.* It keeps 99.2% of its lines.
+- *251 no-text pages*, which have no line baseline. 210 hold under 10 saved words. Re-OCRing the other 41 gained 1.0% more words and 18 more lines of 960.
+
+Two groups are on the list even though they probably don't need it, because they were requested or cost little: 5 of the earlier 24 are above 95% on the better baseline, and only 4 of the earlier 24 are among the 24 lowest now; the 8 "corrupted saved text" files are mostly OCR noise rather than corruption (D-117).
+
+**D-118 — Line retention is in the audit, measured against a stand-in; block crops were also losing lines.** Saved outputs don't record what Tesseract detected, so `quality_audit.py --pdf-dir` compares output lines with the PDF's line structure (`pdf_lines`: spans on a baseline within 6 pt, with at least 3 non-space characters). Of three baselines tried on 139 pages, this one predicted real loss best: with the flags on, Tesseract matches 99.2% of it, and a page flag below 95% had 83.6% precision and 96.2% recall. Retention is the sum of min(PDF lines, output lines) over pages, divided by PDF lines, so extra lines on one page can't hide loss on another. Files below 95% are flagged (the threshold the project set); below 95% is `suspect` and below 70% is `broken` (a guess). `pdf_extract.plan_blocks` decides without running OCR, so the audit also counts exactly which pages the new rule would add.
+
+File-level precision, estimated by re-extracting sampled files in memory ("true" = at least one page gains 8+ words and 5%+):
+
+| Lines short | Flagged files | Sampled | True | Words gained |
+|---|---|---|---|---|
+| 1–2 | 42 | 25 | 48% | +4.5% |
+| 3–9 | 147 | 25 | 72% | +6.7% |
+| 10–99 | 55 | 25 | 72% | +11.2% |
+| 100+ (excluding Death Ref 58) | 7 | 7 | 100% | +18.9% |
+
+Overall about **69%** (an estimated 173 of 251). A flag on a file 1–2 lines short is close to a coin flip. A gain can include Latin junk as well as recovered text.
+
+The check also under-reports. 5 of 40 sampled unflagged files had a page gaining 5%+ words, all of them cover pages of `1_TN_*` orders at or near 100% retention. The diffs show real form text coming back (`বনাম`, `প্রতিপক্ষ`, `আবেদনকারী`). Why retention misses these isn't established; form layouts may not line up one-to-one with baselines. There are 1,211 such files and 51 are on the list.
+
+**Block crops.** Reading one page where the new output had fewer tokens than v2 showed that a tight one-line crop can come back from Tesseract **empty**, with no error: 4 of 12 flagged lines on that page, including a line of 12 tokens. On 116 real blocks, a 20 px white border with `--psm 6` took empty one-line results from 3/57 to 0/57 and agreement with full-page OCR from 87.2% to 93.2%, at the same speed. Padding the crop instead pulled in neighbouring lines (985 words against 907). Block OCR only; full-page OCR is unchanged. D-114's "40 OCR blocks: 100% kept" couldn't show this, because both sides of that comparison used the same crop.
+
+**D-117 — Corrupted-Bangla detector; "62 files" was an undercount.** The D-113 rule (foreign letters over 5% of tokens) only sees one kind of corruption. A blind reading of 62 text-layer files found no clean one and found four kinds: foreign letters with visual-order vowels; visual order with dropped conjuncts; wrong letters, some with code points Unicode leaves unassigned; and lossy layers that keep only isolated letters.
+
+**Likely cause:** rendering known-clean law text through a shaping PDF engine (MuPDF, Nirmala UI) produced the same corruption (`ব িѩ ব িদҝালয়`), because shaped glyphs don't map back to the original code points. This points to how the PDFs were made, not to bad typing. The court's own PDF toolchain hasn't been examined.
+
+The detector (`quality_audit.py`; thresholds in `BANGLA_CHECK`) measures reassembled lines, because PDF spans split words:
+- *Impossible spelling:* a foreign letter, an unassigned Bengali code point, or a vowel sign or virama that doesn't follow a consonant. Flags at 10% of Bangla tokens. In clean text with 20+ tokens the highest is 6.9% for law pieces and 5.8% for whole OCR files. Among 16,649 OCR pages, three are higher (10.5%, 13.7%, 15%), so the gap isn't perfect: the lowest hand-checked corrupted file is 13.3%.
+- *Isolated letters:* single-letter tokens, not counting ও, এ or list markers like `(ক)`. Flags at 40%. Clean text with 20+ tokens peaks at 25%; the lowest hand-checked lossy file is 50%.
+- *Symbol junk:* 25% of tokens with no word or number shape, on pages of 40+ tokens.
+
+Rejected: vowel-sign density (it flagged clean phrases such as `অর্থ আইন, ১৯৯৩ (১৯৯৩ সনের ১৮ নং আইন)`) and vocabulary hit rate (clean OCR pages go as low as 25%, overlapping corrupted files, whose median is 31%).
+
+On a text layer, one impossible token can flag a page, because some files scatter a few corrupted words across pages and a false flag only costs one block of OCR. Flagged blocks that contain Bangla go to OCR, or the whole page if they are over half of it. In saved text the bar is higher, because OCR noise on a handful of tokens would otherwise flag clean files: 10 tokens for a whole file, 20 for one page.
+
+Results (`data_quality/bangla_detector_eval.json`, `corrupted_bangla_handcheck.csv`):
+
+| Test | Result |
+|---|---|
+| Blind labels, 53 files | **53 of 53 flagged** (about 94% lower bound on recall) |
+| All 62, including 9 labelled after unblinding | 61 of 62; the miss has no Bangla letters and the legacy rule handles it |
+| Blind files whose output stays corrupted | v2: 48 of 53. New rule: **0** |
+| Bad tokens surviving in those files | v2: 3,214. New rule: **1** |
+| Whole laws (typed Unicode) | **0 of 594** flagged |
+| Laws cut into 250 / 25 / 6-word pieces | 1 of 8,823 / 78 of 82,242 / 40 of 6,776; mostly odd encodings in the laws (`নিম্্নবর্ণিত`) |
+| PDFs with a known-clean text layer (2 routes) | **0 of 18** pages flagged, no OCR run |
+| OCR-only judgement files | 8 of 3,881 flagged (0.2%), 5 of them with under 50 Bangla tokens |
+| Shaped PDFs with known source text | 6 of 6 flagged; word recall 29% in the layer, 92.6% through the extractor |
+
+**What this doesn't show.** Labels are mine, not a human's, and the CSV says so. No file in the sample was labelled clean, so the sample can't measure precision; false positives come from the separate clean text above. I found no genuinely clean text-layer judgement in the corpus, so a real one has never been tested. The clean-PDF negatives are synthetic.
+
+In the corpus: corrupted text survives in v2 in **197 files (540 pages)**. All of the original 62 are among them. In saved text the check flags 169 files, 161 of which the old rules rated "good". The 8 flagged only in saved text have no corrupted layer, so they are probably OCR noise.
+
 **D-116 — What v2 is, and what's left open (2026-11-04).** `bangladesh_judgements_v2` = `text_v2/` + labels from `clean_metadata.py`. Those labels were derived from the v1 text; they weren't regenerated. One document (`2395499_706of2023`, 2 chunks) is wrongly tagged AD because two-column text put "Appellate Division" in the first 400 characters. Neither is corrected here. v2 was built before D-114 was found, so its OCR'd documents carry the line loss. The API still uses v1.
 
 **D-115 — Death Ref 58 now swamps Bangla vector search (update to D-110).** In v1 this case's Bangla was mojibake, so Bangla queries rarely matched it. Now it's readable, and it's still 21% of chunks. On 10 test queries it went from 5 to 35 of the 100 top-10 results, and it filled all 10 slots for unrelated Bangla questions such as cheque dishonour. English queries were unaffected. Because fusion collapses chunks by file, a vector list full of one case also reduces candidates to one document. A per-document cap is needed before the API moves to v2; to be measured in Phase 3.
 
-**D-114 — Tesseract silently drops Bangla lines; two flags fix it.** A page read by hand next to its output had lost 6 of 18 lines with no error, and every automated check had passed. Layout mode, DPI, language, script model and preprocessing made no difference. `-c textord_noise_rejrows=0 -c textord_noise_rejwords=0` did: 154 → 179 of 179 lines on 8 pages at essentially the same speed, word recall 64.9% → 95.4% on the hand-transcribed page, and no added junk on a 40-page sample. `tessdata_best` also keeps the lines but runs 2.4× slower.
+**D-114 — Tesseract silently drops Bangla lines; two flags fix it.** A page read by hand next to its output had lost 6 of 18 lines with no error, and every automated check had passed. Layout mode, DPI, language, script model and preprocessing made no difference. `-c textord_noise_rejrows=0 -c textord_noise_rejwords=0` did: 154 → 179 of 179 lines on 8 pages at essentially the same speed, word recall 64.9% → 95.4% on the hand-transcribed page, and no added junk on a 40-page sample. `tessdata_best` also keeps the lines but runs 2.4× slower. See D-118 for a separate loss in block crops.
 Loss is concentrated in Death Ref 58 (part 2 keeps 83.0% of lines, part 3 85.0%, part 1 98.4%; about 54,000 of 317,000 lines missing in part 2). Other full-page OCR keeps 95.0% by the line-count metric, which moved only to 95.1% with the fix on a sample, so most of that shortfall is probably metric noise. Block OCR was unaffected. The flags are in `pdf_extract.py` from now on. **Existing outputs and v2 weren't regenerated**: that re-run is the owner's decision.
 Lesson: mojibake and completeness are different properties. `ingestion/text_checks.py lines` now compares output to the PDF's line structure.
 
-**D-113 — A third kind of broken Bangla.** Some text layers look like Unicode but hold visual-order vowels and Latin/IPA/Cyrillic letters in place of Bangla characters (`ǯদওয়ানী আদালেত ɛিতকার`). The legacy-character check can't see them. Found because "ground truth" from such files gave an impossible 27% OCR word recall. `text_checks.py bangla` flags a file when over 5% of its Bangla tokens contain foreign-script letters; the split is clean (3,058 files under 1%, 50 above 20%): **62 files, 0.43% of Bangla tokens**, median 9% Bangla, so mostly English judgements with Bangla quotations. Not re-extracted: `_is_legacy_span` doesn't yet treat these as unreadable. They rate "good" in the audit (61 of 62), and the audit buckets weren't changed, so v1/v2 stay comparable.
+**D-113 — A third kind of broken Bangla.** Some text layers look like Unicode but hold visual-order vowels and Latin/IPA/Cyrillic letters in place of Bangla characters (`ǯদওয়ানী আদালেত ɛিতকার`). The legacy-character check can't see them. Found because "ground truth" from such files gave an impossible 27% OCR word recall. `text_checks.py bangla` flags a file when over 5% of its Bangla tokens contain foreign-script letters; the split is clean (3,058 files under 1%, 50 above 20%): **62 files, 0.43% of Bangla tokens**, median 9% Bangla, so mostly English judgements with Bangla quotations. **Superseded by D-117: this rule finds only one kind of corruption, and 197 files are affected.** Not re-extracted: `_is_legacy_span` doesn't yet treat these as unreadable. They rate "good" in the audit (61 of 62), and the audit buckets weren't changed, so v1/v2 stay comparable.
 
 **D-112 — The v1 integrity check raised a false alarm; it now compares exact vectors.** After the v2 build, `verify-chroma` failed on `neighbours` for v1 and the pipeline stopped. Investigation: index files byte-identical to the pre-build backup; the same probe on the same unchanged DB gave 2 mismatches in about 10 runs; 0 of 45,571 raw float32 vectors and 0 documents differed from a copy of the backup (laws: 0 of 22,400). Approximate search isn't reliably repeatable, so it can't prove anything. Why it flips isn't established; replaying 572 WAL rows into the in-memory index on open is the likely reason. The check now hashes every vector by id, against a baseline taken from a copy of the backup (`chroma_pre_v2_exact.json`), so opening the backup itself was never needed. Tests show one changed vector, one changed document or one deleted id fails it. The pipeline stopping was the right behaviour; the check was wrong.
 

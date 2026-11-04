@@ -21,6 +21,7 @@ The upgrade plan is in `SPEC.md` (8 phases). Work phase by phase; a phase starts
 - The corpus is **High Court Division only** (no AD judgements detected), despite older docs saying AD + HCD.
 - ~2,800 judgements contain Bangla in legacy fonts; in `judgements.json` (v1) that text is ASCII mojibake. `text_v2/` has the re-extracted text, built before the OCR line-loss fix (D-114), so Death Ref 58 parts 2–3 are missing lines there.
 - The API uses v1. `bangladesh_judgements_v2` exists but is unproven through the full pipeline, and one case swamps Bangla vector search (D-115).
+- `quality_audit.py` keeps the original rules in `bucket_old`; `bucket` is strict, so don't compare it with earlier numbers. Corrupted Bangla layers are in 197 files, not 62 (D-117). Retention is measured against PDF line structure, and about 31% of its file flags aren't real loss (D-118).
 - Passing audits don't prove OCR is complete: check real pages by eye (D-114). Approximate search isn't proof that vectors are unchanged: use `verify-chroma` (D-112).
 - `769454_DeathRef58of2013_{1,2}.pdf` have 11,407 and 16,560 pages. Never assume "one PDF" is a small unit of work.
 - Before re-running or touching extraction, check state with `python ingestion/pdf_extract.py --status` (read-only). `python ingestion/run_phase1.py` is safe to re-run: it skips verified outputs and stops at a gate if text is incomplete.
@@ -29,4 +30,4 @@ The upgrade plan is in `SPEC.md` (8 phases). Work phase by phase; a phase starts
 - `ingestion/integrity.py verify-chroma --against data_quality/backups/chroma_pre_v2_exact.json` proves whether v1/laws changed (exact vectors, documents, metadata).
 - Gemini free tier: 15 requests/min **per model**. Batch jobs should use a different model than the running API (e.g. `--model gemini-3.1-flash-lite`).
 - The API (`uvicorn api_v3:app --port 8000`) needs ~2.5 min to start (BM25 over ~68K chunks + reranker load) and holds the Chroma DB open — stop it before rebuilding collections.
-- Tests: `python -m pytest tests/test_rules.py tests/test_pdf_extract.py` (offline), `tests/test_regression.py` (needs the server and real LLM calls).
+- Tests: `python -m pytest tests/test_rules.py tests/test_pdf_extract.py tests/test_text_quality.py` (offline), `tests/test_regression.py` (needs the server and real LLM calls).
