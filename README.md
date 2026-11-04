@@ -32,11 +32,22 @@ This project builds a legal research assistant that treats *trustworthiness* as 
 
 **Scraping approach:** `requests` + `BeautifulSoup` to walk the judgement listing pages and collect PDF links (paginated, with retry + resume-from-existing-file support so re-runs don't re-download), then `PyPDF2` to extract raw text from each downloaded PDF (`extract_text.py`). Law pages are scraped directly as HTML (act-details pages), with footnote markers and superscripts stripped during cleaning.
 
-**Text quality** (`ingestion/quality_audit.py`, details in `evals/reports/phase1_data_quality.md`): of the 8,615 PyPDF2 texts, 43.8% are good, 23.2% suspect (split words such as `DIVISIO N`) and 33.0% broken.
+**Text quality:** all 8,615 PDFs were re-extracted with a cascade (`ingestion/pdf_extract.py`: PyMuPDF → pdfplumber → Tesseract `ben+eng`), turning Bangla that `PyPDF2` read as mojibake (`q¡C−L¡VÑ` = "হাইকোর্ট") into real text. 59.7% of pages come from the text layer and 40.3% needed some OCR. The full report is [`data_quality/phase1_data_quality.md`](data_quality/phase1_data_quality.md).
+
+| Audit bucket | v1 (`PyPDF2`) | v2 (cascade) |
+|---|---|---|
+| good | 43.8% | 80.7% |
+| suspect | 23.2% | 19.1% |
+| broken | 33.0% | 0.2% |
+
+Indexes: `bangladesh_judgements` (v1, 45,571 chunks, used by the API) and `bangladesh_judgements_v2` (42,762 chunks, not used by the API yet).
 
 **Known data gaps:**
-- ~2,800 judgements (mostly s.498 bail and s.561A quashing orders) contain Bangla typeset in legacy fonts (AdarshaLipi, SutonnyMJ). `PyPDF2` extracts it as ASCII mojibake (`q¡C−L¡VÑ` = "হাইকোর্ট"). The new extraction cascade (`ingestion/pdf_extract.py`: PyMuPDF → pdfplumber → Tesseract `ben+eng`) fixes this on a test sample, but hasn't been run on the full corpus yet because the PDFs need re-downloading.
-- PDFs with no text layer were silently dropped by `extract_text.py`, so image-only scans are missing from the corpus.
+- **OCR dropped text lines in v2**, about 17% on Death Reference 58/2013 part 2. The fix is in the code, but those files haven't been re-extracted.
+- **One case dominates:** Death Reference 58/2013 is 21% of v2's chunks and swamps Bangla vector search. A per-document cap is needed before the API moves to v2.
+- 62 files have corrupted Bangla text layers (`ǯদওয়ানী আদালেত ɛিতকার`) that remain unreadable in v2.
+- 133 extra files have text identical to another file, and 10 PDFs contain each page 2–3 times.
+- PDFs with no text layer at all were dropped by `extract_text.py` and are still missing from the corpus.
 - Not in the scraped laws corpus: NI Act s.138A, the Bangladesh Labour Act 2006, the Premises Rent Control Act 1991.
 
 ---
@@ -152,12 +163,13 @@ finalize           → fixed answer structure; citations still failing are remov
 ## 9. Evaluation & Tests
 
 ```bash
-python -m pytest tests/test_rules.py -q          # deterministic rules, no server needed
+python -m pytest tests/test_rules.py tests/test_pdf_extract.py -q   # rules and extraction crash-safety, no server needed
 uvicorn api_v3:app --port 8000                  # then, in another terminal:
 python -m pytest tests/test_regression.py -v     # 4 live questions: cheque dishonour procedure,
                                                 # murder bail, "Section 302", divorce procedure
-python evals/run_eval.py --label after           # 20 questions → eval/results/after.json
+python evals/run_eval.py --label after           # 20 questions → evals/reports/after.json
 python evals/run_eval.py --compare before after  # side-by-side summary
+python evals/retrieval_smoke.py                  # v1 vs v2 vector search on 10 questions, no API or LLM
 ```
 
 `run_eval.py` logs, per question: retrieved laws and cases, `applicable_laws` count, `citation_verified`, unverified citations, retrieval attempts, sufficiency, persona-claim detection and latency.
@@ -169,8 +181,9 @@ python evals/run_eval.py --compare before after  # side-by-side summary
 - **Latency on CPU** — the reranker costs ~0.4 s per (query, chunk) pair even int8-quantized, and Gemini's free tier often takes 10+ s per call; a typical answer takes about a minute on a 4-core CPU. A GPU or a hosted reranker would cut most of this.
 - **Gemini free-tier rate limit** — 15 requests/minute per model. Each answer uses 2–3 calls; under load the Groq fallback takes over.
 - **High Court Division only** — no Appellate Division judgements in the corpus yet, so the AD > HCD weight has nothing to act on.
-- **Legacy-font judgements** — ~2,400 Bangla judgements are unreadable mojibake until converted from Bijoy encoding to Unicode.
-- **Outcome coverage** — the rule-based extractor can't determine the outcome for ~54% of judgements (`unknown`), which limits `outcome_stats` and contradiction detection.
+- **The API still uses v1**, where ~2,800 judgements contain legacy-font mojibake. v2 fixes that but has the gaps listed in section 3.
+- **OCR accuracy** — on clean Bangla: 97.1% character similarity, 87.9% word recall. Accuracy on legacy-font pages has only been hand-checked on one page, and OCR adds some Latin junk to Bangla text.
+- **Outcome coverage** — the rule-based extractor can't determine the outcome for ~53% of judgements (`unknown`), which limits `outcome_stats` and contradiction detection.
 - **Reranker threshold** (`RERANK_THRESHOLD = 0.05`) was set from a small calibration probe, not tuned on real query logs.
 - **Inline citations** are flagged, not removed — removing a section number from the middle of a sentence would garble it.
 - **Statute currency** — repealed/amended sections aren't tracked yet.
@@ -190,10 +203,11 @@ api_v3.py                 # FastAPI app + LangGraph pipeline (current)
 legal_rules.py            # Alias dictionary, intent rules, persona check, answer schema
 api_v2.py                 # Previous API version
 legal_ui_v2.html          # Single-file web UI for the API
-ingestion/                # quality_audit.py (text quality buckets), pdf_extract.py (extraction cascade)
-data_quality/             # audit.csv + summaries
-evals/                    # run_eval.py, reports/
-tests/                    # test_rules.py (offline), test_regression.py (live server)
+ingestion/                # pdf_extract.py (extraction cascade), run_phase1.py (full run, safe to re-run),
+                          # quality_audit.py, text_checks.py (quality), integrity.py (proves nothing changed)
+data_quality/             # phase1_data_quality.md (report), audits, text checks
+evals/                    # run_eval.py, retrieval_smoke.py, reports/
+tests/                    # test_rules.py, test_pdf_extract.py (offline), test_regression.py (live server)
 docs/DECISIONS.md         # assumptions and design decisions
 SPEC.md                   # upgrade plan (phases 1–8)
 requirements.txt
@@ -221,8 +235,11 @@ python extract_text.py            # PDF → text → judgements.json
 python govt_scraper.py            # statutes → bangladesh_laws.json
 python build_laws_vectordb.py     # laws collection
 python clean_metadata.py --subjects --apply   # cleanup + LLM subject labels + Bangla section numbers
-python enrich_judgements.py       # judgements collection (uses the cleanup output)
+python enrich_judgements.py --text raw --labels regex   # v1 judgements collection
+python ingestion/run_phase1.py --workers 2              # re-extract, audit, build the v2 collection
 ```
+
+`run_phase1.py` needs the Tesseract binary with `ben` and `eng` data, and can take many hours on a CPU (the corpus has PDFs of 11,407 and 16,560 pages). It saves progress, so it's safe to re-run after an interruption; stop the API first.
 
 Run the API and open the UI (the first start downloads the ~2.3 GB reranker):
 

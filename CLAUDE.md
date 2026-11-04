@@ -19,7 +19,9 @@ The upgrade plan is in `SPEC.md` (8 phases). Work phase by phase; a phase starts
 
 - Windows machine, CPU only (4 threads). Use `venv/Scripts/python.exe`. Run scripts with `PYTHONIOENCODING=utf-8` — the console is cp1252 and Bangla output crashes otherwise.
 - The corpus is **High Court Division only** (no AD judgements detected), despite older docs saying AD + HCD.
-- ~2,800 judgements contain Bangla in legacy fonts; in `judgements.json` (v1) that text is ASCII mojibake. `text_v2/` has the re-extracted text.
+- ~2,800 judgements contain Bangla in legacy fonts; in `judgements.json` (v1) that text is ASCII mojibake. `text_v2/` has the re-extracted text, built before the OCR line-loss fix (D-114), so Death Ref 58 parts 2–3 are missing lines there.
+- The API uses v1. `bangladesh_judgements_v2` exists but is unproven through the full pipeline, and one case swamps Bangla vector search (D-115).
+- Passing audits don't prove OCR is complete: check real pages by eye (D-114). Approximate search isn't proof that vectors are unchanged: use `verify-chroma` (D-112).
 - `769454_DeathRef58of2013_{1,2}.pdf` have 11,407 and 16,560 pages. Never assume "one PDF" is a small unit of work.
 - Before re-running or touching extraction, check state with `python ingestion/pdf_extract.py --status` (read-only). `python ingestion/run_phase1.py` is safe to re-run: it skips verified outputs and stops at a gate if text is incomplete.
 - Long jobs die if tied to the session that started them; start them detached and keep the laptop on AC.
