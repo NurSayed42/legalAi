@@ -341,7 +341,7 @@ def test_block_ocr_uses_border_and_single_block_layout_but_full_page_does_not(mo
     calls = []
 
     def fake(img, lang, config, timeout):
-        calls.append((img.size, config))
+        calls.append((img.size, config, lang))
         return "text"
 
     monkeypatch.setattr(pytesseract, "image_to_string", fake)
@@ -352,8 +352,8 @@ def test_block_ocr_uses_border_and_single_block_layout_but_full_page_does_not(mo
     pdf_extract._ocr_pymupdf(page)
     plain = page.get_pixmap(dpi=pdf_extract.CONFIG["ocr_dpi"], clip=clip)
     doc.close()
-    (block_size, block_config), (_, page_config) = calls
+    (block_size, block_config, _), (_, page_config, page_lang) = calls
     border = pdf_extract.CONFIG["ocr_block_border_px"]
     assert block_size == (plain.width + 2 * border, plain.height + 2 * border)
     assert "--psm 6" in block_config and "--psm" not in page_config
-    assert all("textord_noise_rejrows=0" in c for _, c in calls)
+    assert all("textord_noise_rejrows=0" in c for _, c, _ in calls) and page_lang == "ben+eng"

@@ -151,9 +151,38 @@ def test_plan_ocrs_only_the_corrupted_block():
     assert [needs_ocr for _, _, needs_ocr in plan.blocks] == [False, False, True]
 
 
-def test_plan_uses_full_page_when_corruption_dominates():
+def test_plan_stays_on_blocks_even_when_corruption_dominates():
+    """পুরো page OCR এ পরিষ্কার ইংরেজিও OCR এর ভুল পায়, আর ভাষা block ধরে বাছা যায় না (D-121)।"""
     plan = plan_blocks([block("Page 3"), block((FOREIGN_VISUAL + " ") * 4, 200)])
-    assert plan.method == "ocr_page_corrupted" and plan.layer_problem == "impossible_spelling"
+    assert plan.method == "pymupdf+ocr_bangla" and plan.layer_problem == "impossible_spelling"
+    assert [needs_ocr for _, _, needs_ocr in plan.blocks] == [False, True] and plan.layer_blocks == {1}
+
+
+def test_legacy_blocks_are_not_treated_as_layer_blocks():
+    legacy = block("h¡wm¡−cn fË¡¢çl ¢hQ¡l¢f¢a")
+    plan = plan_blocks([block(ENGLISH), legacy, block(FOREIGN_VISUAL, 200)])
+    assert plan.method == "pymupdf+ocr_bangla" and plan.ocr_blocks == 2 and plan.layer_blocks == {2}
+
+
+def test_block_language_follows_the_english_in_the_layer():
+    assert pdf_extract.block_ocr_language(FOREIGN_VISUAL) == "ben", "ইংরেজি নেই: শুধু ben"
+    assert pdf_extract.block_ocr_language("৬। ১২৩/২০১৯ (ক)") == "ben", "সংখ্যা ইংরেজি না"
+    assert pdf_extract.block_ocr_language(f"Memo No. {FOREIGN_VISUAL}") == "ben+eng", "ইংরেজি হারানো চলবে না"
+    assert pdf_extract.block_ocr_language(f"(a) No {FOREIGN_VISUAL}") == "ben", "২ অক্ষরের Latin layer এর junk হতে পারে"
+
+
+def test_extract_page_picks_the_language_per_block(monkeypatch):
+    seen = []
+
+    def fake_ocr(page, clip=None, lang=None):
+        seen.append(lang)
+        return "OCR_OUTPUT"
+
+    monkeypatch.setattr(pdf_extract, "_ocr_pymupdf", fake_ocr)
+    legacy = block("h¡wm¡−cn fË¡¢çl ¢hQ¡l¢f¢a", 50)
+    page = FakePage([legacy, block(ENGLISH, 100), block(FOREIGN_VISUAL, 200), block(f"Memo No. {FOREIGN_VISUAL}", 300)])
+    extract_page_pymupdf(page)
+    assert seen == [None, "ben", "ben+eng"], "legacy এ default; নষ্ট layer এ ইংরেজি দেখে; পরিষ্কার ইংরেজি OCR এই যায় না"
 
 
 def test_plan_full_page_for_junk_layer():
@@ -187,7 +216,7 @@ class FakePage:
 def test_extract_page_replaces_only_the_flagged_block(monkeypatch):
     clips = []
 
-    def fake_ocr(page, clip=None):
+    def fake_ocr(page, clip=None, lang=None):
         clips.append(clip)
         return "OCR_OUTPUT"
 

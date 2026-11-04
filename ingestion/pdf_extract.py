@@ -12,7 +12,8 @@ Judgement PDF → text, extraction cascade (SPEC Phase 1.4)। PyPDF2 এর ত
        - page এ কোনো text নেই                         → পুরো page
        - legacy-font text page এর অর্ধেকের বেশি         → পুরো page (একটা call, কম overhead)
        - কিছু block legacy font এ                       → শুধু ওই block গুলোর অংশ
-       - text layer এর বাংলা নষ্ট (D-117)                → বাংলা আছে এমন block, অর্ধেকের বেশি হলে পুরো page
+       - text layer এর বাংলা নষ্ট (D-117, D-121)         → শুধু বাংলা আছে এমন block; যে block এ ইংরেজি নেই
+                                                          সেটা শুধু ben দিয়ে, নইলে বাংলা Latin junk হয়ে যায়
      Legacy span চেনা হয় font নাম (AdarshaLipi*, SutonnyMJ …) অথবা mojibake character দিয়ে।
      SPEC এ "OCR only for pages with no extractable text" — কিন্তু legacy-font page এ text আছে,
      সেটাই mojibake; তাই trigger টা "page/block quality check fail" (docs/DECISIONS.md D-103)।
@@ -64,6 +65,8 @@ CONFIG = {
     "tesseract_cmd": os.getenv("TESSERACT_CMD", r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
     "tessdata_dir": os.getenv("TESSDATA_PREFIX", str(ROOT / "tessdata")),
     "ocr_lang": "ben+eng",
+    "ocr_lang_bangla_block": "ben",  # নষ্ট layer এর যে block এ কোনো Latin শব্দ নেই (D-121)
+    "latin_word_min_letters": 3,     # এর ছোট Latin token layer এর junk ও হতে পারে, ইংরেজি ধরা হয় না
     "ocr_dpi": 200,                 # probe এ 300 dpi র চেয়ে দ্রুত (3.7s vs 6.3s/page) আর কম junk
     "ocr_timeout_s": 300,           # এক OCR call এর সীমা; আটকে গেলে page টা ব্যর্থ, run চলতে থাকে
     # Default এ Tesseract বাংলার কিছু লাইনকে "noise" ধরে চুপচাপ ফেলে দেয় — Death Ref 58 এ প্রতি ৬ লাইনে
@@ -223,19 +226,19 @@ def _is_legacy_span(span: dict) -> bool:
     return len(text) >= 5 and len(LEGACY_RE.findall(text)) / letters > CONFIG["span_legacy_char_ratio"]
 
 
-def _ocr_image(img, extra_config: str = "") -> str:
+def _ocr_image(img, extra_config: str = "", lang: str | None = None) -> str:
     import pytesseract
     config = f'{CONFIG["ocr_config"]} {extra_config}'.strip()
-    return pytesseract.image_to_string(img, lang=CONFIG["ocr_lang"], config=config, timeout=CONFIG["ocr_timeout_s"])
+    return pytesseract.image_to_string(img, lang=lang or CONFIG["ocr_lang"], config=config, timeout=CONFIG["ocr_timeout_s"])
 
 
-def _ocr_pymupdf(page, clip=None) -> str:
+def _ocr_pymupdf(page, clip=None, lang: str | None = None) -> str:
     from PIL import Image, ImageOps
     pix = page.get_pixmap(dpi=CONFIG["ocr_dpi"], clip=clip)
     img = Image.open(io.BytesIO(pix.tobytes("png")))
     if clip is None:
         return _ocr_image(img)
-    return _ocr_image(ImageOps.expand(img, border=CONFIG["ocr_block_border_px"], fill="white"), CONFIG["ocr_block_config"])
+    return _ocr_image(ImageOps.expand(img, border=CONFIG["ocr_block_border_px"], fill="white"), CONFIG["ocr_block_config"], lang)
 
 
 @dataclass
@@ -244,6 +247,7 @@ class PagePlan:
     method: str
     blocks: list = field(default_factory=list)      # (block, text, ocr করতে হবে কিনা)
     layer_problem: str = ""
+    layer_blocks: set = field(default_factory=set)  # blocks এর যে index গুলো নতুন rule এ OCR হচ্ছে, legacy তে না
 
     @property
     def ocr_blocks(self) -> int:
@@ -260,6 +264,13 @@ def _block_is_unreadable(text: str) -> bool:
         return True
     total, junk = junk_stats(text)
     return total >= CONFIG["junk_block_min_tokens"] and junk / total >= CONFIG["junk_block_ratio"]
+
+
+def block_ocr_language(layer_text: str) -> str:
+    """নষ্ট layer এও ইংরেজি অক্ষর ঠিক থাকে, তাই layer দেখেই বোঝা যায় block এ ইংরেজি আছে কিনা। না থাকলে শুধু ben: ben+eng
+    এ ইটালিক বাংলা Latin junk হয়ে যায় ('প্রতিষ্ঠানের' → 'TOMA')। Legacy layer এ চলে না: সেখানে mojibake ই Latin।"""
+    latin = re.findall(r"[A-Za-z]{%d,}" % CONFIG["latin_word_min_letters"], layer_text)
+    return CONFIG["ocr_lang"] if latin else CONFIG["ocr_lang_bangla_block"]
 
 
 def plan_blocks(blocks: list, check_layer: bool = True) -> PagePlan:
@@ -280,20 +291,23 @@ def plan_blocks(blocks: list, check_layer: bool = True) -> PagePlan:
         return PagePlan("ocr_page_no_text")
 
     problem = ""
+    layer_blocks = set()
     if check_layer:
         problem = text_layer_problem("\n".join(text for _, text, unreadable, _ in parsed if not unreadable))
         if problem == "junk_tokens":
             return PagePlan("ocr_page_corrupted", layer_problem=problem)
         if problem:
-            for row in parsed:
+            for index, row in enumerate(parsed):
                 if not row[2] and _block_is_unreadable(row[1]):
                     row[2] = True
                     corrupted += row[3]
+                    layer_blocks.add(index)
 
-    if (legacy + corrupted) / total > CONFIG["full_page_ocr_share"]:
-        return PagePlan("ocr_page_legacy" if legacy >= corrupted else "ocr_page_corrupted", layer_problem=problem)
+    # নষ্ট layer পুরো page OCR এ যায় না: block ধরে গেলে পরিষ্কার ইংরেজি হুবহু থাকে, আর ভাষা block ধরে বাছা যায় (D-121)
+    if legacy / total > CONFIG["full_page_ocr_share"]:
+        return PagePlan("ocr_page_legacy", layer_problem=problem)
     method = "pymupdf+ocr_bangla" if corrupted else "pymupdf+ocr_blocks" if legacy else "pymupdf"
-    return PagePlan(method, [(b, text, needs_ocr) for b, text, needs_ocr, _ in parsed], problem)
+    return PagePlan(method, [(b, text, needs_ocr) for b, text, needs_ocr, _ in parsed], problem, layer_blocks)
 
 
 def extract_page_pymupdf(page) -> tuple[str, str, int]:
@@ -303,8 +317,12 @@ def extract_page_pymupdf(page) -> tuple[str, str, int]:
     if plan.method.startswith("ocr_page"):
         return _ocr_pymupdf(page), plan.method, 0
     out = []
-    for b, text, needs_ocr in plan.blocks:
-        out.append(_ocr_pymupdf(page, clip=pymupdf.Rect(b["bbox"])).strip() if needs_ocr else text)
+    for index, (b, text, needs_ocr) in enumerate(plan.blocks):
+        if not needs_ocr:
+            out.append(text)
+            continue
+        lang = block_ocr_language(text) if index in plan.layer_blocks else None
+        out.append(_ocr_pymupdf(page, clip=pymupdf.Rect(b["bbox"]), lang=lang).strip())
     return "\n".join(out), plan.method, plan.ocr_blocks
 
 
