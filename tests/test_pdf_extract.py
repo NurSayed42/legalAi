@@ -318,3 +318,18 @@ def test_chroma_verify_fails_on_old_baseline_without_vector_hash(tmp_path):
     del data["guarded"]["vectors_sha256"]
     snap.write_text(json.dumps(data), encoding="utf-8")
     assert not integrity.verify_chroma(db, snap)["ok"]
+
+
+def test_ocr_keeps_noise_like_rows(monkeypatch):
+    """Default Tesseract বাংলার লাইন 'noise' ধরে ফেলে দেয়; flag দুইটা OCR call এ যাওয়া চাই।"""
+    import pytesseract
+    seen = {}
+
+    def fake(img, lang, config, timeout):
+        seen.update(lang=lang, config=config, timeout=timeout)
+        return "text"
+
+    monkeypatch.setattr(pytesseract, "image_to_string", fake)
+    assert pdf_extract._ocr_image(object()) == "text"
+    assert "textord_noise_rejrows=0" in seen["config"] and "textord_noise_rejwords=0" in seen["config"]
+    assert seen["lang"] == "ben+eng" and seen["timeout"] == pdf_extract.CONFIG["ocr_timeout_s"]

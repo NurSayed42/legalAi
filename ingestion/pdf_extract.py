@@ -65,6 +65,9 @@ CONFIG = {
     "ocr_lang": "ben+eng",
     "ocr_dpi": 200,                 # probe এ 300 dpi র চেয়ে দ্রুত (3.7s vs 6.3s/page) আর কম junk
     "ocr_timeout_s": 300,           # এক OCR call এর সীমা; আটকে গেলে page টা ব্যর্থ, run চলতে থাকে
+    # Default এ Tesseract বাংলার কিছু লাইনকে "noise" ধরে চুপচাপ ফেলে দেয় — Death Ref 58 এ প্রতি ৬ লাইনে
+    # ১টা হারিয়েছিল, কোনো error ছাড়া (docs/DECISIONS.md D-114)। এই দুইটা flag এ 179/179 লাইন থাকে।
+    "ocr_config": "-c textord_noise_rejrows=0 -c textord_noise_rejwords=0",
     "min_page_chars": 20,           # এর কম text থাকলে page "text ছাড়া" ধরা হয়
     "full_page_ocr_share": 0.5,     # legacy-font character এর ভাগ এর বেশি হলে পুরো page OCR
     "span_legacy_char_ratio": 0.1,  # font নাম না মিললেও span এ এত mojibake থাকলে legacy
@@ -215,7 +218,8 @@ def _is_legacy_span(span: dict) -> bool:
 
 def _ocr_image(img) -> str:
     import pytesseract
-    return pytesseract.image_to_string(img, lang=CONFIG["ocr_lang"], timeout=CONFIG["ocr_timeout_s"])
+    return pytesseract.image_to_string(img, lang=CONFIG["ocr_lang"], config=CONFIG["ocr_config"],
+                                       timeout=CONFIG["ocr_timeout_s"])
 
 
 def _ocr_pymupdf(page, clip=None) -> str:
