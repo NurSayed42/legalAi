@@ -14,8 +14,13 @@ judgement_subjects.jsonl
 downloaded_pdfs/
 pdf_links.txt
 text_v2/
+text_v2_parts/
 tessdata/
 data_quality/failures.jsonl
+data_quality/backups/
+data_quality/quarantine/
+data_quality/*.lock
+legal_chroma_db_backup_pre_v2/
 .pytest_cache/
 
 # Vector DB (rebuild with scripts)
