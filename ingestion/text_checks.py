@@ -7,6 +7,8 @@ quality_audit.py যা ধরে না তার read-only পরীক্ষ�
             Cyrillic অক্ষর মেশানো, কার visual ক্রমে ('ǯদওয়ানী আদালেত ɛিতকার')। প্রতিটা file এ:
               mixed_token_ratio  বাংলা token এর মধ্যে অন্য লিপির অক্ষর আছে এমন token এর ভাগ
               vocab_hit          বাংলা token এর কত ভাগ বাংলা আইনের শব্দভাণ্ডারে আছে
+            পুরনো rule (D-113, "62 file"), অনেক file বাদ পড়ে। নতুন rule quality_audit.py এ (D-117);
+            এটা শুধু পুরনো সংখ্যা মেলানোর জন্য।
   scanned   ছোট text কিন্তু page জুড়ে image — অল্প junk text এর কারণে OCR বাদ পড়া scan হতে পারে।
             কতগুলো page, আর একটা sample OCR করলে কত text বাড়ে।
   ocr       OCR accuracy, আসল ground truth দিয়ে: জানা পরিষ্কার বাংলা (আইনের text) render করে OCR

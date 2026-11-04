@@ -12,6 +12,7 @@ Judgement PDF → text, extraction cascade (SPEC Phase 1.4)। PyPDF2 এর ত
        - page এ কোনো text নেই                         → পুরো page
        - legacy-font text page এর অর্ধেকের বেশি         → পুরো page (একটা call, কম overhead)
        - কিছু block legacy font এ                       → শুধু ওই block গুলোর অংশ
+       - text layer এর বাংলা নষ্ট (D-117)                → বাংলা আছে এমন block, অর্ধেকের বেশি হলে পুরো page
      Legacy span চেনা হয় font নাম (AdarshaLipi*, SutonnyMJ …) অথবা mojibake character দিয়ে।
      SPEC এ "OCR only for pages with no extractable text" — কিন্তু legacy-font page এ text আছে,
      সেটাই mojibake; তাই trigger টা "page/block quality check fail" (docs/DECISIONS.md D-103)।
@@ -46,7 +47,7 @@ import traceback
 from collections import Counter, deque
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
 from pathlib import Path
@@ -57,7 +58,7 @@ if hasattr(sys.stdout, "reconfigure"):
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from ingestion.quality_audit import LEGACY_RE  # noqa: E402
+from ingestion.quality_audit import BN_LETTER_RE, BN_SIGN_RE, LEGACY_RE, junk_stats, text_layer_problem  # noqa: E402
 
 CONFIG = {
     "tesseract_cmd": os.getenv("TESSERACT_CMD", r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
@@ -76,6 +77,8 @@ CONFIG = {
     "full_page_ocr_share": 0.5,     # legacy-font character এর ভাগ এর বেশি হলে পুরো page OCR
     "span_legacy_char_ratio": 0.1,  # font নাম না মিললেও span এ এত mojibake থাকলে legacy
     "span_control_char_ratio": 0.3, # এর বেশি control code = character map ছাড়া embed করা font
+    "junk_block_ratio": 0.5,        # নষ্ট page এ বাংলা ছাড়া এমন block ও OCR হবে — অনুমান
+    "junk_block_min_tokens": 3,
     "shard_threshold_pages": 200,   # এর বেশি page হলে page-range checkpoint
     "shard_pages": 50,              # OCR এ ~3.8 s/page, তাই crash এ সর্বোচ্চ ~৩ মিনিটের কাজ হারায়
     "pool_units_files": 25,         # এতগুলো file এর পর worker process নতুন
@@ -235,11 +238,33 @@ def _ocr_pymupdf(page, clip=None) -> str:
     return _ocr_image(ImageOps.expand(img, border=CONFIG["ocr_block_border_px"], fill="white"), CONFIG["ocr_block_config"])
 
 
-def extract_page_pymupdf(page) -> tuple[str, str, int]:
-    """(text, method, ocr_blocks)"""
-    import pymupdf
-    blocks = [b for b in page.get_text("dict", sort=True)["blocks"] if b.get("type") == 0]
-    total = legacy = 0
+@dataclass
+class PagePlan:
+    """এক page নিয়ে কী করা হবে। OCR চালায় না, তাই audit একই সিদ্ধান্ত দেখে OCR খরচ ছাড়াই গুনতে পারে।"""
+    method: str
+    blocks: list = field(default_factory=list)      # (block, text, ocr করতে হবে কিনা)
+    layer_problem: str = ""
+
+    @property
+    def ocr_blocks(self) -> int:
+        return sum(1 for _, _, needs_ocr in self.blocks if needs_ocr)
+
+
+def page_text_blocks(page) -> list:
+    return [b for b in page.get_text("dict", sort=True)["blocks"] if b.get("type") == 0]
+
+
+def _block_is_unreadable(text: str) -> bool:
+    """নষ্ট বলে ধরা page এর কোন block OCR হবে: বাংলা অক্ষর আছে, অথবা নিজেই প্রতীকের junk।"""
+    if BN_LETTER_RE.search(text) or BN_SIGN_RE.search(text):
+        return True
+    total, junk = junk_stats(text)
+    return total >= CONFIG["junk_block_min_tokens"] and junk / total >= CONFIG["junk_block_ratio"]
+
+
+def plan_blocks(blocks: list, check_layer: bool = True) -> PagePlan:
+    """check_layer=False = v2 এর সিদ্ধান্ত (শুধু legacy font), audit এ তুলনার জন্য।"""
+    total = legacy = corrupted = 0
     parsed = []
     for b in blocks:
         spans = [s for line in b["lines"] for s in line["spans"]]
@@ -247,24 +272,40 @@ def extract_page_pymupdf(page) -> tuple[str, str, int]:
         n_legacy = sum(len(s["text"]) for s in spans if _is_legacy_span(s))
         total += n
         legacy += n_legacy
+        # span শব্দের মাঝখানে ভাঙে, তাই লাইন জোড়া দেওয়া text এর উপরেই নষ্ট বাংলার হিসাব
         text = "\n".join("".join(s["text"] for s in line["spans"]) for line in b["lines"])
-        parsed.append((b, text, n_legacy > 0))
+        parsed.append([b, text, n_legacy > 0, n])
 
     if total < CONFIG["min_page_chars"]:
-        return _ocr_pymupdf(page), "ocr_page_no_text", 0
-    if legacy / total > CONFIG["full_page_ocr_share"]:
-        return _ocr_pymupdf(page), "ocr_page_legacy", 0
-    if legacy == 0:
-        return "\n".join(t for _, t, _ in parsed), "pymupdf", 0
+        return PagePlan("ocr_page_no_text")
 
-    out, ocr_blocks = [], 0
-    for b, text, has_legacy in parsed:
-        if has_legacy:
-            out.append(_ocr_pymupdf(page, clip=pymupdf.Rect(b["bbox"])).strip())
-            ocr_blocks += 1
-        else:
-            out.append(text)
-    return "\n".join(out), "pymupdf+ocr_blocks", ocr_blocks
+    problem = ""
+    if check_layer:
+        problem = text_layer_problem("\n".join(text for _, text, unreadable, _ in parsed if not unreadable))
+        if problem == "junk_tokens":
+            return PagePlan("ocr_page_corrupted", layer_problem=problem)
+        if problem:
+            for row in parsed:
+                if not row[2] and _block_is_unreadable(row[1]):
+                    row[2] = True
+                    corrupted += row[3]
+
+    if (legacy + corrupted) / total > CONFIG["full_page_ocr_share"]:
+        return PagePlan("ocr_page_legacy" if legacy >= corrupted else "ocr_page_corrupted", layer_problem=problem)
+    method = "pymupdf+ocr_bangla" if corrupted else "pymupdf+ocr_blocks" if legacy else "pymupdf"
+    return PagePlan(method, [(b, text, needs_ocr) for b, text, needs_ocr, _ in parsed], problem)
+
+
+def extract_page_pymupdf(page) -> tuple[str, str, int]:
+    """(text, method, ocr_blocks)"""
+    import pymupdf
+    plan = plan_blocks(page_text_blocks(page))
+    if plan.method.startswith("ocr_page"):
+        return _ocr_pymupdf(page), plan.method, 0
+    out = []
+    for b, text, needs_ocr in plan.blocks:
+        out.append(_ocr_pymupdf(page, clip=pymupdf.Rect(b["bbox"])).strip() if needs_ocr else text)
+    return "\n".join(out), plan.method, plan.ocr_blocks
 
 
 def extract_page_pdfplumber(pdf_path: Path, page_no: int) -> tuple[str, str]:
@@ -273,7 +314,7 @@ def extract_page_pdfplumber(pdf_path: Path, page_no: int) -> tuple[str, str]:
     with pdfplumber.open(pdf_path, pages=[page_no + 1]) as pdf:
         page = pdf.pages[0]
         text = page.extract_text() or ""
-        if len(text.strip()) >= CONFIG["min_page_chars"] and not LEGACY_RE.search(text):
+        if len(text.strip()) >= CONFIG["min_page_chars"] and not LEGACY_RE.search(text) and not text_layer_problem(text):
             return text, "pdfplumber"
         return _ocr_image(page.to_image(resolution=CONFIG["ocr_dpi"]).original), "ocr_page_pdfplumber"
 
