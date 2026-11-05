@@ -17,6 +17,43 @@ The laws collection is not exactly the original: on 2026-10-27 `clean_metadata.p
 
 **D-006 — Test/eval layout.** The earlier `eval/` folder was split into `evals/` (runner, reports) and `tests/` (unit + live regression tests) to match SPEC §3.
 
+## Phase 2 — evaluation harness
+
+**D-203 — Two hazards to measure, not fix yet.** Both were found before any BM25 result, by reading the code and counting characters.
+- *Unicode form:* v3 stores `য়` decomposed 208,712 times and precomposed 10 times; `ড়` and `ঢ়` are always decomposed. The API's tokenizer doesn't normalize, so a query typed with the single-character form can't match those tokens. Which form real users' keyboards send isn't known. A diagnostic run repeats the Bangla queries in that form.
+- *Fusion:* `api_v3._rrf` adds up the scores of every chunk of a file, which may favour long documents. A unit test shows a large file beating a small one that ranked first in both lists. `hybrid_api` keeps that behaviour, and `hybrid` doesn't, so the effect can be measured.
+
+**D-202 — Labels are verified by Claude, not by a person.** SPEC says a human verifies every expected source, and the request asks for manually verified judgements. I can't be that human, and asking would stall the work, so:
+- Claude grades each pooled case by reading term counts and excerpts from `text_v3/`, without seeing which system retrieved it. This isn't a reading of whole judgements or a lawyer's opinion.
+- Every positive grade carries a quote, and a test checks that each quote is verbatim in that case's text. That proves the quote exists, not that the grade is right.
+- Every row keeps `human_verified: false`, and the report calls its results provisional until someone reviews `evals/golden/human_review.csv`. Re-scoring after a review takes seconds.
+- Known-item targets are checked against the case's own first page, and no-answer terms against all of `text_v3/`. Those two groups don't depend on grading judgement.
+
+**D-201 — Retrieval benchmark protocol, fixed before any BM25, hybrid or reranker result was seen.** The commit history shows this entry and the query file predate the runs. Dense results were seen for 15 of the 95 queries in Phase 1; those are marked `seen_before`.
+
+*Benchmark:* 95 queries over 58 information needs.
+- 33 known-item (case numbers and party names). Targets come from a seeded random sample, stratified by script and taken roughly in order. I skipped cases whose first page lists many consolidated petitions or has no distinctive name, so this isn't a pure random sample.
+- 12 exact legal terms and 32 topics, each need asked in both Bangla and English.
+- 10 about Death Ref 58, 5 needs in both languages.
+- 8 no-answer, 4 needs in both languages, whose key terms have zero mentions in `text_v3/`.
+
+*Design choices that are judgement calls, all in `evals/retrieval_config.json`:*
+- Results are compared by case, not chunk. Otherwise one large case filling ten slots would count ten times, and systems would be compared on different units.
+- Fetch 200 chunks per query, so collapsing to cases still leaves 10. Fuse the top 100 per method.
+- Rerank the top 50, following SPEC. The API reranks only 6, so this is a more generous test of the reranker than production.
+- Reranker text and token limits stay the same as the API's. At 256 tokens the reranker sees only about the first third of a 600-word chunk.
+- Large case means the top 1% by chunk count.
+
+*Pooling:* grade the union of all v3 systems' top 10, plus 5 cases per need from a term search over all of `text_v3/` with no retriever. That independent source lets a relevant case count even if every system missed it. Unjudged cases count as not relevant, and judged@10 is reported per system.
+
+*Primary metric:* nDCG@10. Recall@10, Precision@10 and MRR@10 are reported alongside it.
+
+*Declared comparisons, 8 in total:* `bm25` vs `dense`, `hybrid` vs `dense`, `hybrid` vs `bm25`, `hybrid_rerank` vs `hybrid`, each on Bangla and on English queries, excluding no-answer queries.
+
+*Decision rule:* a system counts as better only if the 95% paired bootstrap interval excludes zero **and** the Holm-adjusted sign-flip p-value across those 8 tests is below 0.05. Both resample by need, with 10,000 samples and a fixed seed. Anything else is reported as "no measured difference", which isn't proof that the two are equal. Group-level tables, `hybrid_api`, v1 and v2 runs and the Unicode diagnostic are descriptive and support no claim.
+
+*Not measured here:* LLM query rewriting and aliases, law retrieval, generation, citations, abstention. The API isn't restarted, and no collection is built or changed.
+
 ## Phase 1 — data quality
 
 **D-101 — Audit buckets and thresholds** (`ingestion/quality_audit.py`, `THRESHOLDS`). All are guesses tuned on the 30-file sample below:
