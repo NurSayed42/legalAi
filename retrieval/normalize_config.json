@@ -1,0 +1,5 @@
+{
+  "_note": "Guessed rules for the Phase 3 stemming test. Longest suffixes first. Not used in production.",
+  "min_stem_letters": 3,
+  "bn_suffixes": ["গুলোতে", "গুলোকে", "গুলোর", "গুলিতে", "গুলির", "গুলো", "গুলি", "দেরকে", "দের", "য়ের", "েরা", "ের", "টির", "টিতে", "কে", "টি", "টা"]
+}

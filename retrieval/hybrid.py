@@ -10,6 +10,7 @@ Dense, BM25 আর fusion, মাপার জন্য আলাদা কর�
 
 import re
 from collections import defaultdict
+from collections.abc import Callable
 from typing import Any
 
 from pydantic import BaseModel
@@ -64,12 +65,13 @@ class ChunkStore:
 class BM25Index:
     """api_v3._bm25_search এর মতো: score 0 বা তার নিচের chunk ফেরত দেয় না।"""
 
-    def __init__(self, store: ChunkStore):
+    def __init__(self, store: ChunkStore, tokenizer: Callable[[str], list[str]] | None = None):
         self.store = store
-        self.bm25 = BM25Okapi([tokenize(d) for d in store.docs])
+        self.tokenizer = tokenizer or tokenize  # Phase 3 এর পরীক্ষার জন্য বদলানো যায়, default baseline
+        self.bm25 = BM25Okapi([self.tokenizer(d) for d in store.docs])
 
     def search(self, query: str, n: int) -> list[RankedChunk]:
-        scores = self.bm25.get_scores(tokenize(query))
+        scores = self.bm25.get_scores(self.tokenizer(query))
         # সমান score এ id ধরে, api_v3 এ stable sort করে collection এর ক্রমে
         order = sorted(range(len(scores)), key=lambda i: (-scores[i], self.store.ids[i]))
         out = []
