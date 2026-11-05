@@ -51,6 +51,9 @@ def main() -> None:
         shutil.copytree(PRODUCTION_DB, tmp)
         tmp.rename(out)
         print(f"copied to {out}")
+    if not BASELINE.exists():  # gitignored, তাই নতুন clone এ থাকে না
+        print(f"copy made, but not verified: {BASELINE.name} doesn't exist on this machine")
+        return
     report = verify_chroma(out, BASELINE)
     if not report.get("ok"):
         raise SystemExit(f"the copy doesn't match the baseline: {report}")
