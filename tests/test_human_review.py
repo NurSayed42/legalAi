@@ -34,11 +34,13 @@ def decision(kind: str, proposed: int = 2, human: int | None = None, need: str =
     return HumanDecision(review_id=review_id(need, case), need_id=need, case_key=case, proposed_grade=proposed, decision=kind, human_grade=human, reviewer=reviewer, reviewed_on="2026-11-06")
 
 
+@pytest.mark.skipif(not QRELS.exists(), reason="evaluation data is local only (D-211)")
 def test_frozen_labels_and_queries_are_unchanged():
     assert hashlib.sha256(QRELS.read_bytes()).hexdigest()[:12] == FROZEN_QRELS_SHA
     assert hashlib.sha256((ROOT / "evals" / "golden" / "retrieval_queries.jsonl").read_bytes()).hexdigest()[:12] == FROZEN_QUERIES_SHA
 
 
+@pytest.mark.skipif(not QRELS.exists(), reason="evaluation data is local only (D-211)")
 def test_no_label_is_marked_verified_by_a_person_in_the_labels_file():
     assert not any(r.human_verified for r in load_qrels(QRELS))
 

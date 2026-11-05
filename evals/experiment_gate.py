@@ -22,6 +22,8 @@ MIN_JUDGED = 0.9
 
 
 def review_gate(golden: Path = GOLDEN) -> dict:
+    if not (golden / "retrieval_qrels.jsonl").exists():  # evaluation data is local only (D-211); none means not ready
+        return {"ready": False, "reviewed": 0, "positive_labels": 0}
     positive = {(r.need_id, r.case_key) for r in load_qrels(golden / "retrieval_qrels.jsonl") if r.grade >= 1}
     latest = latest_decisions(load_decisions(golden / "human_corrections.jsonl"))
     reviewed = sum(key in latest and latest[key].decision != "unsure" for key in positive)
@@ -36,6 +38,8 @@ def lay_gate(golden: Path = GOLDEN, runs: Path = RUNS, minimum: float = MIN_JUDG
     missing = [s for s in LAY_SYSTEMS if s not in run["systems"]]
     if missing:
         return {"ready": False, "reason": f"lay run lacks {missing}"}
+    if not ((golden / "retrieval_qrels.jsonl").exists() and (golden / "lay_qrels.jsonl").exists()):
+        return {"ready": False, "reason": "labels aren't on this machine"}
     grades = grades_by_need(load_qrels(golden / "retrieval_qrels.jsonl") + load_qrels(golden / "lay_qrels.jsonl"))
     queries = load_queries(golden / "lay_queries.jsonl")
     shares = {}

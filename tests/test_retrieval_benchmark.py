@@ -20,6 +20,8 @@ HAS_TEXT = (ROOT / "text_v3").is_dir()
 
 @pytest.fixture(scope="module")
 def queries() -> list[BenchmarkQuery]:
+    if not QUERIES.exists():
+        pytest.skip("evaluation data is local only (D-211)")
     return load_queries(QUERIES)
 
 

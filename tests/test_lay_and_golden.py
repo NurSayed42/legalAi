@@ -12,6 +12,8 @@ from evals.retrieval_schema import BenchmarkQuery, load_qrels, load_queries
 
 ROOT = Path(__file__).resolve().parent.parent
 GOLDEN = ROOT / "evals" / "golden"
+if not GOLDEN.is_dir():
+    pytest.skip("evaluation data is local only (D-211)", allow_module_level=True)
 LAY = load_queries(GOLDEN / "lay_queries.jsonl")
 BENCHMARK = load_queries(GOLDEN / "retrieval_queries.jsonl")
 HAS_TEXT = (ROOT / "text_v3").is_dir()
