@@ -34,6 +34,36 @@ The laws collection is not exactly the original: on 2026-10-27 `clean_metadata.p
 
 **D-103 — OCR trigger is "page fails the quality check", not only "page has no text".** SPEC Phase 1.4 says OCR only for pages with no extractable text. Legacy-font pages *do* have extractable text — it's mojibake — so that rule would leave all ~2,800 legacy-font files broken. The cascade OCRs a page when its text is empty **or** the page fails the same legacy-font/garbage checks as the audit.
 
+**D-123 — The v3 run's four deaths were its console window closing; long jobs now start with no window (2026-11-05).** Four times every Python and Tesseract process vanished together, with an empty error log and no crash record. `Win32_Process.Create` had given the job a visible, blank Windows Terminal window, and each death matches that window being destroyed in `Microsoft-Windows-AppModel-Runtime/Admin`:
+
+| Death | Window opened | Window destroyed | Lifetime | Last output before it |
+|---|---|---|---|---|
+| 1 | 22:54:11 | 23:00:14 | 6 min | 23:00:01 |
+| 2 | 23:01:37 | 23:01:56 | 19 s | 23:01:49 |
+| 3 | 23:04:25 | 23:04:38 | 14 s | none in that run |
+| 4 | 23:07:11 | 23:55:06 | 48 min | 23:54:46 |
+
+A controlled test on throwaway processes started the same way settled the direction. Closing the window ended every process at once with `0xC000013A` and wrote nothing to stderr, which is the signature seen. Killing a process first left the window open and the others running, so a crash wouldn't explain it. Hiding the window didn't disturb anything.
+
+**Not established:** what closed the window. No exit codes were recorded for these four, and the logs show the window closing but not why. The irregular lifetimes and Snipping Tool opening at 23:56:31 suggest a person at the laptop. The power change at 23:00:10 looks like coincidence, since the other three deaths had none. The outer job object has no memory or process limit, so it isn't the cause and doesn't cap the index build. The older `BrokenProcessPool` is a separate event (D-107).
+
+Each death cost only the files in progress, thanks to the checkpoints: 0 failed files or pages, and all 3 automatic restarts worked. The fifth run started with a visible window that was then hidden, and it finished, through a 16-minute spell on battery and Modern Standby from 05:29. Long jobs should start with `ShowWindow=0`. That launcher was tested on throwaway processes with a worker pool, Tesseract and redirected output, but it never ran the real job, because no restart happened after it was installed.
+
+**D-122 — What v3 fixed and didn't; the cap stays for now (2026-11-05).** Tables are in `data_quality/phase1_data_quality.md`, section 5a. It verified cleanly. Lines kept on the same pages rose from 93.25% to 99.31% (Death Ref 58 part 2: 84.29% to 99.97%), files with corrupted Bangla fell from 169 to 9, and the hand-transcribed page went from 64.9% to 95.4% word recall.
+
+The cap did what the simulation in D-120 predicted, on real v3:
+
+| Measure | Simulation at 400 | Real v3 |
+|---|---|---|
+| Other Bangla topics: Death Ref slots of 90 | 5–14 | **11** |
+| Worst single case in a top 10 | 2–4 | **3** |
+| Distinct documents of 90 | 79–87 | **85** |
+| Own topic: queries finding it, of 6 | 3–5 | **4** |
+
+**Two problems remain, and v3 didn't cause the first.** Bangla relevance is poor: 10 of 100 results contain the query's key term in v3, 9 of 100 in v2, against 34 of 50 for English. The term list was written after seeing results, so it only compares versions. Off-topic Bangla text scores up to 0.89, which points at the embedding model. And the cap's cost is now measured: the direct query `পিলখানা বিদ্রোহ বিডিআর হত্যাকাণ্ড` went from 4 of 10 results on the case to 0, though 260 of its 400 indexed chunks contain the key terms. The case's best chunk ranks 16th.
+
+**Decision:** keep 400. Changing it means rebuilding v3, and no cap fixes relevance: without the cap, one case fills the results with text that's mostly off-topic anyway. The API stays on v1. **What would change this:** Phase 3 testing v3 through BM25 and the reranker. If the capped case stays unreachable there, the options are keyword search over the case's full text, a better Bangla embedding model, or down-weighting at query time instead of a cap. `api_v3.py` builds BM25 from the collection, so today it would see only the 400 chunks.
+
 **D-121 — Corrupted layers are OCRed block by block, with the language chosen per block.** `ben+eng` turns italic Bangla into Latin junk (`প্রতিষ্ঠানের` became `TOMA`), and `ben` alone destroys English (`ছঘদ81160 006 8০০৮৪০0`), so no single setting works for a page. `eng+ben` gives the same output as `ben+eng`. English letters survive in a corrupted layer, so the layer shows which blocks contain English: a block with no Latin word of 3+ letters uses `ben`, and the rest keep `ben+eng`. Clean English blocks stay as exact text, so these pages no longer go to full-page OCR.
 
 | 14 real corrupted pages | Old route | New route |
@@ -43,7 +73,7 @@ The laws collection is not exactly the original: on 2026-10-27 `clean_metadata.p
 | Lines | 339 | 339 |
 | Seconds per page | 8.5 | 6.6 |
 
-On clean upright text with known source, recall falls slightly, from 93.6% to 92.0%. The output is still imperfect on italic Bangla (`এতোক শিহ্ষা গাতিষরানের` for `প্রত্যেক শিক্ষা প্রতিষ্ঠানের`), though it's now recognisably Bangla. An italic test with known source wasn't possible, because Nirmala UI has no italic face. Legacy-font layers can't use this, because their mojibake looks like Latin, so full-page legacy OCR keeps `ben+eng` and its Latin junk (the issue in D-106).
+On clean upright text with known source, recall falls slightly, from 93.6% to 92.0%. The output is still imperfect on italic Bangla (`এতোক শিহ্ষা গাতিষরানের` for `প্রত্যেক শিক্ষা প্রতিষ্ঠানের`), though it's now recognisably Bangla. An italic test with known source wasn't possible, because Nirmala UI has no italic face. Legacy-font layers can't use this, because their mojibake looks like Latin, so full-page legacy OCR keeps `ben+eng` and its Latin junk (the issue in D-106). On shaped PDFs with known source text, the new route's word recall is 90.5% (it was 92.6%). In v3 the Latin junk rate is unchanged (D-122).
 
 **D-120 — v3 caps a case at 400 chunks.** Death Ref 58 has 8,988 chunks in v2; the next-largest case has 354, and the 99th percentile is 26. The cap is an integer in `ingestion/chunk_cap.py`, and the three PDFs of this case count as one case. Each PDF keeps its first and last 5 chunks (header and final order); the rest are evenly spaced. Selection comes from the text alone, so verification recomputes the exact ids. v1 and v2 builds are unaffected.
 
@@ -58,11 +88,11 @@ Chosen by simulation (`evals/cap_simulation.py`): exact search over v2's real ve
 | 300 | 2–14 | 2–5 | 79–88 | 3–5 |
 | 100 | 0–6 | 2 | 87–88 | 2–3 |
 
-400 is where swamping drops sharply without losing more own-topic recall than 300, and it sits above every other case, so in practice only this case is capped. **The cost is real:** about 95% of this case's chunks aren't vector-searchable, and some questions about it will no longer find it. The full text stays in `text_v3/`. Down-weighting at query time would keep everything searchable but means changing retrieval, so that's a Phase 3 question. These numbers are from v2's vectors; v3 has to be measured itself.
+400 is where swamping drops sharply without losing more own-topic recall than 300, and it sits above every other case, so in practice only this case is capped. **The cost is real:** about 95% of this case's chunks aren't vector-searchable, and some questions about it will no longer find it. The full text stays in `text_v3/`. Down-weighting at query time would keep everything searchable but means changing retrieval, so that's a Phase 3 question. These numbers are from v2's vectors; real v3 matched them (D-122).
 
 The retrieval test had 5 Bangla queries. 5 more were added before v3 existed, so the Bangla test now has 10.
 
-**D-119 — What gets re-OCRed (list built; the run needs approval).** `data_quality/reocr_list.csv`, from `ingestion/reocr_list.py`: **453 files, 25,753 pages**. A file can have several reasons: low retention 253, corrupted text layer 197, corrupted saved text 8, the earlier list of 24, Death Ref 58 parts 2 and 3. Files on the list keep 85.9% of their lines; files off it keep 99.0%. Estimated 5.8 h at 2 workers, from v2's recorded per-file seconds (4.4 h of that is Death Ref 58).
+**D-119 — What gets re-OCRed (approved and run 2026-11-04; results in D-122).** `data_quality/reocr_list.csv`, from `ingestion/reocr_list.py`: **453 files, 25,753 pages**. A file can have several reasons: low retention 253, corrupted text layer 197, corrupted saved text 8, the earlier list of 24, Death Ref 58 parts 2 and 3. Files on the list keep 85.9% of their lines; files off it keep 99.0%. Estimated 5.8 h at 2 workers, from v2's recorded per-file seconds (4.4 h of that is Death Ref 58).
 
 Left out on purpose:
 - *3,789 other files with OCR* (12.4 CPU-hours, 6.2 h at 2 workers). In a sample of 40, re-extraction gained 1.0% more words. They can be added if a uniform v3 is worth the time.

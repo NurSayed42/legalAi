@@ -19,15 +19,16 @@ The upgrade plan is in `SPEC.md` (8 phases). Work phase by phase; a phase starts
 
 - Windows machine, CPU only (4 threads). Use `venv/Scripts/python.exe`. Run scripts with `PYTHONIOENCODING=utf-8` — the console is cp1252 and Bangla output crashes otherwise.
 - The corpus is **High Court Division only** (no AD judgements detected), despite older docs saying AD + HCD.
-- ~2,800 judgements contain Bangla in legacy fonts; in `judgements.json` (v1) that text is ASCII mojibake. `text_v2/` has the re-extracted text, built before the OCR line-loss fix (D-114), so Death Ref 58 parts 2–3 are missing lines there.
-- The API uses v1. `bangladesh_judgements_v2` exists but is unproven through the full pipeline, and one case swamps Bangla vector search (D-115).
+- ~2,800 judgements contain Bangla in legacy fonts; in `judgements.json` (v1) that text is ASCII mojibake. `text_v2/` has the re-extracted text, built before the OCR line-loss fix (D-114), so Death Ref 58 parts 2–3 are missing lines there. `text_v3/` has the fix: 453 files re-OCRed and the rest copied from v2, with `source_version` in its manifest.
+- The API uses v1. `bangladesh_judgements_v3` (34,217 chunks, Death Ref 58 capped at 400 of 9,861, D-120) is unproven through the full pipeline. In `bangladesh_judgements_v2` one case swamps Bangla vector search (D-115).
+- Fixing the swamping didn't fix Bangla relevance: only 10 of 100 top results contain the query's key term in v3's vector search, and 2 of 6 queries about Death Ref 58 no longer find it (D-122).
 - `quality_audit.py` keeps the original rules in `bucket_old`; `bucket` is strict, so don't compare it with earlier numbers. Corrupted Bangla layers are in 197 files, not 62 (D-117). Retention is measured against PDF line structure, and about 31% of its file flags aren't real loss (D-118).
 - Passing audits don't prove OCR is complete: check real pages by eye (D-114). Approximate search isn't proof that vectors are unchanged: use `verify-chroma` (D-112).
 - `769454_DeathRef58of2013_{1,2}.pdf` have 11,407 and 16,560 pages. Never assume "one PDF" is a small unit of work.
 - Before re-running or touching extraction, check state with `python ingestion/pdf_extract.py --status` (read-only). `python ingestion/run_phase1.py` is safe to re-run: it skips verified outputs and stops at a gate if text is incomplete.
-- Long jobs die if tied to the session that started them; start them detached and keep the laptop on AC.
+- Long jobs die if tied to the session that started them; start them detached and keep the laptop on AC. Give them no window (`Win32_Process.Create` with `ShowWindow=0`): closing a visible console kills the whole job without a trace (D-123).
 - `enrich_judgements.py` builds into `<collection>__building` and swaps at the end; it refuses to replace an existing collection without `--allow-replace`. `--text raw --labels regex --allow-replace` reproduces the original v1 index. A full rebuild takes ~70 min (≈11 chunks/s).
-- `ingestion/integrity.py verify-chroma --against data_quality/backups/chroma_pre_v2_exact.json` proves whether v1/laws changed (exact vectors, documents, metadata).
+- `ingestion/integrity.py verify-chroma --against data_quality/backups/chroma_pre_v2_exact.json` proves whether v1/laws changed (exact vectors, documents, metadata). `chroma_pre_v3_exact.json` also covers v2.
 - Gemini free tier: 15 requests/min **per model**. Batch jobs should use a different model than the running API (e.g. `--model gemini-3.1-flash-lite`).
 - The API (`uvicorn api_v3:app --port 8000`) needs ~2.5 min to start (BM25 over ~68K chunks + reranker load) and holds the Chroma DB open — stop it before rebuilding collections.
-- Tests: `python -m pytest tests/test_rules.py tests/test_pdf_extract.py tests/test_text_quality.py` (offline), `tests/test_regression.py` (needs the server and real LLM calls).
+- Tests: `python -m pytest tests/test_rules.py tests/test_pdf_extract.py tests/test_text_quality.py tests/test_chunk_cap.py tests/test_v3_pipeline.py` (offline), `tests/test_regression.py` (needs the server and real LLM calls).
