@@ -7,7 +7,7 @@ The generation, citation and abstention metrics from SPEC Phase 2 aren't built y
 ## Run it
 
 ```bash
-# Full run on v3, about 40 minutes on CPU. Stop the API first. Safe to re-run: reranker scores are cached.
+# Full run on v3, about 55 minutes on CPU. Stop the API first. Safe to re-run: reranker scores are cached.
 python evals/retrieval_run.py --collection bangladesh_judgements_v3 --out evals/runs/v3.json
 
 # Other collections or query forms, without the reranker
@@ -16,6 +16,12 @@ python evals/retrieval_run.py --collection bangladesh_judgements_v3 --systems de
 
 # Re-score in seconds, for example after a label changes
 python evals/retrieval_score.py --out evals/reports/retrieval_v3
+
+# Sensitivity checks outside the declared comparisons, about 2 minutes
+python evals/retrieval_explore.py
+
+# After a person has filled in the review sheet
+python evals/tools/human_review.py import
 
 # Prove nothing changed
 python ingestion/integrity.py verify-chroma --against data_quality/backups/chroma_phase2_baseline_exact.json
@@ -34,6 +40,9 @@ python ingestion/integrity.py verify-chroma --against data_quality/backups/chrom
 | `retrieval_run.py`, `retrieval_score.py` | Produce ranked lists, then score them |
 | `tools/draft_candidates.py` | Seeded case sampling and whole-corpus term counts, with no retriever |
 | `tools/build_pool.py`, `tools/apply_labels.py` | Blind judging cards, then grades into qrels |
+| `tools/human_review.py` | Exports the review sheet and imports a person's grades |
+| `retrieval_explore.py` | Exploratory checks, which support no claim |
+| `reports/phase2_retrieval_comparison.md` | The results and recommendations |
 
 ## Systems
 

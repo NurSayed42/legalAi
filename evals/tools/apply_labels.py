@@ -38,7 +38,7 @@ def parse_labels(path: Path) -> dict[str, tuple[int, str, str]]:
         passage, note = "a", ""
         if len(parts) == 3:
             head, _, tail = parts[2].partition(" ")
-            if head in ("a", "b"):
+            if head in ("a", "b", "c"):
                 passage, note = head, tail
             else:
                 note = parts[2]
