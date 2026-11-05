@@ -19,6 +19,36 @@ The laws collection is not exactly the original: on 2026-10-27 `clean_metadata.p
 
 ## Phase 2 — evaluation harness
 
+**D-209 — Phase 3 is prepared but gated.** `evals/experiments/phase3_plan.json` lists E1 translation, E2 embedding models, E2b chunks that fit the model, E3 reranking BM25 alone, E4 normalization and E5 large documents. BM25 on v3 is the comparison point, as the user decided, and is not declared production-ready. `evals/run_experiment.py --run` and the embedding builder's `--run` refuse until `evals/experiment_gate.py` finds every positive label decided by a person and at least 90% of the lay top-10 results graded. Those are computed from files, so nobody can mark them ready by hand. Nothing here changes a production default, the cap or a collection. New vectors go to `evals/cache/embeddings`, never into ChromaDB.
+
+*Cost correction:* E3 is cheaper than it looked. Depths 10 and 20 are almost entirely cached for the benchmark queries.
+
+*Why E2b exists:* MiniLM's `max_seq_length` is 128 tokens and chunks are 600 words. Of 1,500 sampled v3 chunks, 97.1% are cut off, and the model reads a median of 80 words (57 in Bangla-script chunks). So dense search has mostly been matching the opening of each chunk. This wasn't known when I suggested in D-122 and D-204 that the model itself separates Bangla poorly. Truncation is now a competing explanation, and only a test can separate them.
+
+**D-208 — Opening ChromaDB writes to it, so evaluation no longer opens production.** Checked on the evaluation copy: opening it and reading one row changed the SHA-256 of `chroma.sqlite3` and its modified time. Compared with the copy, production differed in 34 bytes with the same file size: 2 in the SQLite header and the rest in one other page. Collection IDs, counts, documents, metadata and vectors still match the baseline exactly, so nothing a query can see changed.
+
+This means every read-only run in Phases 1 and 2 that opened `legal_chroma_db`, including my `verify-chroma` checks, altered the file in this way. In this round production was opened once: my `verify-chroma` at 17:41 on 2026-11-05. I didn't restore it, because there is no byte-exact earlier copy and the contents are proven identical.
+
+From now on, evaluation tools default to the copy and refuse the production path, and `integrity.py verify-files` checks production by file hash without opening it. Its snapshot is `data_quality/backups/chroma_phase2_files.json`. The API itself has this effect whenever it starts, which is normal for ChromaDB.
+
+**D-208a — Isolated environment for pipeline testing.** `evals/pipeline_env.py` imports `api_v3` into the evaluation process and calls its graph directly, so no server starts, no port is used and `api_v3.py` is unchanged. It refuses the production database path and opens a copy made by `evals/tools/make_eval_db.py`, which checks the copy against the Phase 2 exact-hash baseline. A read-only proxy blocks every write call. The API hardcodes the collection name, so the proxy maps it to v1, v2 or v3 in this process only. That lets v2 and v3 be measured without migrating anything.
+
+`--llm fake` runs with no network and can't become a baseline. For real runs, `call_llm` is replaced in this process by `llm/client.py`, which adds retry, cache and token logging. So a real run differs from production in those respects, while the model, prompts and 0.1 temperature stay the same. SPEC asks for temperature 0 where possible, but I kept 0.1 so the baseline measures what production does. The judge runs at 0 on a different provider when one is available, and each row records whether it was independent.
+
+**D-207 — Human review is recorded separately, and labels never change silently.** `retrieval_qrels.jsonl` is frozen, and a test pins its hash. Reviewer decisions go to the append-only `evals/golden/human_corrections.jsonl`, with the reviewer's name and date; a later decision on the same label wins. Scores use them only with `retrieval_score.py --with-corrections`, and each report says whether they were applied. This replaces the earlier `human_review.py import`, which overwrote the labels.
+
+`human_review.csv` now holds only the 564 positive labels. It adds the question, PDF and page, the case's opening text, the graded passage and the retrieved passage, in a shuffled order within each question, and it never names the system. Zero grades stay in the labels file and aren't in the sheet, so false zeros aren't being reviewed in this round. 31 of the 564 were in no system's top 10, and the sheet says so.
+
+**D-206 — Lay-language benchmark and how it will be judged.** 22 queries in `evals/golden/lay_queries.jsonl`: 10 Bangla, 9 English, 3 Banglish or mixed, in 8 wording styles, 20 of them without legal terminology. A test checks that for a word list. I wrote them, so they are my imitation of lay wording, not real user questions; real ones would be better if the user has any.
+
+18 reuse an existing need and share its grades, so those grades were made for formal wording. 4 are new needs (`ln-01` to `ln-04`) with expected judgements from whole-corpus term search, in `lay_qrels.jsonl`, separate from the frozen labels. `ln-03`, on daughters' shares, found related cases but none on point. These are only the judgements known so far, not a complete pool.
+
+*Rule, fixed before any lay result was read:* the same 4 comparisons as D-201, on Bangla and on English lay queries, with the same interval and Holm test. Mixed queries are too few and are descriptive only. A comparison stays "not ready" until at least 90% of both systems' top-10 results are graded (`min_judged_for_claim`), because unjudged results count as misses and would unfairly penalize whichever system finds new cases.
+
+*Order, stated plainly:* a count-only dry run on dense, BM25 and hybrid happened before this was committed. It printed pool sizes, and the ranked lists weren't read. It found 360 of 435 pooled cases still to grade, before adding the reranker's results.
+
+Dense's truncation (D-209) also limits this test: if lay queries still favour BM25, that says little about dense search that reads whole chunks.
+
 **D-205 — Phase 2 is only partly done.** The retrieval framework, benchmark and comparison are finished. SPEC's generation, citation and abstention metrics, the adversarial set and the `--system pipeline` baseline aren't. They need the pipeline and LLM calls, and the user asked for no API restart at this stage, so its acceptance criteria aren't met. Moving to Phase 3 is the user's decision.
 
 **D-204 — Retrieval results and what they rest on.** Full report: `evals/reports/phase2_retrieval_comparison.md`. nDCG@10, Bangla / English: dense 0.061 / 0.414, BM25 0.559 / 0.849, hybrid 0.312 / 0.670, hybrid + rerank 0.546 / 0.843. All 8 declared comparisons passed the rule in D-201: BM25 beats dense and hybrid, hybrid beats dense, reranking beats hybrid, in both languages. Hybrid + rerank vs BM25 wasn't declared; it's exploratory and shows no measured difference.
