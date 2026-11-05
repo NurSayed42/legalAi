@@ -1,0 +1,97 @@
+import type { Config } from "tailwindcss";
+
+/**
+ * Every value maps to a CSS variable in src/styles/tokens.css, so themes swap without a rebuild.
+ * The default palette and spacing are replaced, not extended, so a component can't use an off-system value by accident.
+ */
+const config: Config = {
+  content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  darkMode: ["selector", '[data-theme="dark"]'],
+  theme: {
+    screens: { xs: "480px", md: "768px", lg: "1024px", xl: "1280px", "2xl": "1536px" },
+    colors: {
+      transparent: "transparent",
+      current: "currentColor",
+      canvas: "var(--bg-0)",
+      surface: "var(--bg-1)",
+      raised: "var(--bg-2)",
+      field: "var(--bg-3)",
+      glass: "var(--glass)",
+      line: { 1: "var(--line-1)", 2: "var(--line-2)", strong: "var(--line-strong)" },
+      fg: { 1: "var(--text-1)", 2: "var(--text-2)", 3: "var(--text-3)" },
+      gold: {
+        400: "var(--gold-400)",
+        500: "var(--gold-500)",
+        600: "var(--gold-600)",
+        glow: "var(--gold-glow)",
+        tint: "var(--gold-tint)",
+      },
+      accent: "var(--accent-text)",
+      "on-gold": "var(--on-gold)",
+      success: { DEFAULT: "var(--success)", tint: "var(--success-tint)" },
+      danger: { DEFAULT: "var(--danger)", tint: "var(--danger-tint)" },
+      warning: { DEFAULT: "var(--warning)", tint: "var(--warning-tint)" },
+      info: { DEFAULT: "var(--info)", tint: "var(--info-tint)" },
+      paper: { DEFAULT: "var(--paper)", fg: "var(--paper-fg)", muted: "var(--paper-muted)", line: "var(--paper-line)" },
+      scrim: "var(--scrim)",
+    },
+    spacing: {
+      0: "0",
+      px: "1px",
+      0.5: "2px",
+      1: "4px",
+      1.5: "6px",
+      2: "8px",
+      3: "12px",
+      4: "16px",
+      5: "20px",
+      6: "24px",
+      7: "28px",
+      8: "32px",
+      9: "36px",
+      10: "40px",
+      11: "44px",
+      12: "48px",
+      14: "56px",
+      16: "64px",
+      20: "80px",
+      24: "96px",
+      32: "128px",
+    },
+    fontFamily: {
+      sans: ["Inter", "Hind Siliguri", "Noto Sans Bengali", "system-ui", "sans-serif"],
+      serif: ["Fraunces", "Noto Serif Bengali", "Georgia", "serif"],
+      mono: ["JetBrains Mono", "Hind Siliguri", "ui-monospace", "monospace"],
+    },
+    fontSize: {
+      12: "0.75rem",
+      13: "0.8125rem",
+      14: "0.875rem",
+      16: "1rem",
+      18: "clamp(1.0625rem, 1.03rem + 0.15vw, 1.125rem)",
+      20: "clamp(1.125rem, 1.07rem + 0.25vw, 1.25rem)",
+      24: "clamp(1.25rem, 1.15rem + 0.5vw, 1.5rem)",
+      30: "clamp(1.5rem, 1.33rem + 0.85vw, 1.875rem)",
+      38: "clamp(1.75rem, 1.47rem + 1.4vw, 2.375rem)",
+      48: "clamp(2rem, 1.55rem + 2.25vw, 3rem)",
+    },
+    borderColor: ({ theme }) => ({ ...theme("colors"), DEFAULT: "var(--line-1)" }),
+    borderRadius: { none: "0", sm: "4px", DEFAULT: "8px", card: "12px", panel: "16px", full: "999px" },
+    boxShadow: {
+      none: "none",
+      1: "var(--shadow-1)",
+      2: "var(--shadow-2)",
+      3: "var(--shadow-3)",
+      glow: "0 0 0 1px var(--gold-500), 0 0 24px var(--gold-glow)",
+    },
+    transitionDuration: { 0: "0ms", fast: "120ms", DEFAULT: "180ms", slow: "260ms" },
+    transitionTimingFunction: { DEFAULT: "cubic-bezier(.2,.8,.2,1)" },
+    extend: {
+      maxWidth: { content: "1120px", chat: "760px", paper: "800px", prose: "68ch" },
+      zIndex: { nav: "30", header: "40", sheet: "50", toast: "60", skip: "70" },
+    },
+  },
+  plugins: [],
+};
+
+export default config;
