@@ -62,3 +62,6 @@ logs/
 evals/runs/
 evals/cache/
 evals/judging/
+
+# Local review page, generated from the committed sheet
+evals/review/

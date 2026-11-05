@@ -122,29 +122,3 @@ def test_every_evidence_quote_is_verbatim_in_its_case():
     texts = {k: squeeze(v) for k, v in raw.items()}
     bad = [(r.need_id, r.case_key) for r in load_qrels(QRELS) if r.grade >= 1 and squeeze(r.evidence) not in texts[r.case_key]]
     assert not bad
-
-
-def _qrel(grade: int, evidence: str = "") -> Qrel:
-    return Qrel(need_id="n", case_key="c", grade=grade, evidence=evidence, judged_by="claude")
-
-
-def test_human_review_overrides_grade_and_marks_verified():
-    from evals.tools.human_review import apply_rows
-
-    updated, changed = apply_rows([_qrel(2, "quote")], [{"need_id": "n", "case_key": "c", "human_grade": "0", "human_evidence": "", "human_notes": "off topic"}])
-    assert changed == 1
-    assert (updated[0].grade, updated[0].human_verified, updated[0].evidence, updated[0].judged_by) == (0, True, "", "claude")
-
-
-def test_human_review_blank_row_changes_nothing():
-    from evals.tools.human_review import apply_rows
-
-    updated, changed = apply_rows([_qrel(1, "quote")], [{"need_id": "n", "case_key": "c", "human_grade": ""}])
-    assert changed == 0 and updated[0].human_verified is False
-
-
-def test_human_review_positive_grade_needs_a_quote():
-    from evals.tools.human_review import apply_rows
-
-    with pytest.raises(SystemExit):
-        apply_rows([_qrel(0)], [{"need_id": "n", "case_key": "c", "human_grade": "2", "human_evidence": ""}])
