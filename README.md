@@ -240,7 +240,8 @@ enrich_judgements.py      # Judgement metadata + judgements collection (uses cle
 api_v3.py                 # FastAPI app + LangGraph pipeline (current)
 legal_rules.py            # Alias dictionary, intent rules, persona check, answer schema
 api_v2.py                 # Previous API version
-legal_ui_v2.html          # Single-file web UI for the API (React from a CDN, no build step)
+frontend/                 # The web UI: Vite, React, TypeScript, Tailwind. See frontend/README.md and DESIGN.md
+legal_ui_v2.html          # The previous single-file UI, kept as the rollback
 ingestion/                # pdf_extract.py (extraction cascade), run_phase1.py (full run, safe to re-run),
                           # quality_audit.py, text_checks.py (quality), integrity.py (proves nothing changed)
 data_quality/             # Local only: phase 1 report, audits, text checks
@@ -290,12 +291,17 @@ uvicorn api_v3:app --port 8000
 # then open legal_ui_v2.html in a browser (it calls http://localhost:8000)
 ```
 
+`api_v3.py` doesn't serve a UI itself. The new UI in `frontend/` is served by the local launcher below; how production will serve it hasn't been decided.
+
 To see the working system without starting the API or opening the main database, run the UI and the real pipeline together on a copy:
 
 ```bash
 python evals/tools/make_eval_db.py      # once: copies the database, about 3.8 GB
+cd frontend && npm ci && npm run build && cd ..   # once: builds the new UI
 python evals/serve_live.py              # takes about 3 minutes to load, then open http://localhost:8001
 ```
+
+Without a build, or with `--ui legacy`, it serves the old page instead.
 
 It listens only on your own computer and uses v1 data by default; add `--collection v3` to try v3. Q&A, Outcome Prediction and Document Generator make real LLM calls when you use them, so they need your API keys. Case & Law Search doesn't.
 
