@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from evals.metrics.retrieval import judged_at_k, ndcg_at_k, paired_bootstrap_ci, sign_flip_p  # noqa: E402
+from evals.pipeline_env import EVAL_DB, guard_db_path  # noqa: E402
 from evals.retrieval_schema import RetrievalEvalConfig, grades_by_need, load_qrels, load_queries  # noqa: E402
 from evals.retrieval_score import DR58  # noqa: E402
 from evals.tools.corpus import TEXT_DIR, normalize  # noqa: E402
@@ -221,7 +222,7 @@ def main() -> None:
     cfg = RetrievalEvalConfig.model_validate(run["config"])
     queries = load_queries(GOLDEN / "retrieval_queries.jsonl")
     grades = grades_by_need(load_qrels(GOLDEN / "retrieval_qrels.jsonl"))
-    client = chromadb.PersistentClient(path=str(ROOT / "legal_chroma_db"))
+    client = chromadb.PersistentClient(path=str(guard_db_path(EVAL_DB)))
     store = ChunkStore.from_collection(client.get_collection("bangladesh_judgements_v3"))
     report = {
         "note": "Exploratory, outside the 8 comparisons declared in D-201. p-values are unadjusted and support no claim.",

@@ -26,6 +26,7 @@ if hasattr(sys.stdout, "reconfigure"):
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from evals.pipeline_env import EVAL_DB, guard_db_path  # noqa: E402
 from evals.retrieval_schema import BenchmarkQuery, RetrievalEvalConfig, load_config, load_queries  # noqa: E402
 from ingestion.chunk_cap import case_key  # noqa: E402
 from retrieval.hybrid import BM25Index, ChunkStore, RankedChunk, collapse_to_cases, dense_search, rrf_as_api, rrf_chunks  # noqa: E402
@@ -99,7 +100,8 @@ def main() -> None:
     ap.add_argument("--systems", nargs="+", default=ALL_SYSTEMS, choices=ALL_SYSTEMS)
     ap.add_argument("--query-form", choices=["nfc", "precomposed"], default="nfc")
     ap.add_argument("--language", choices=["bn", "en"], default=None)
-    ap.add_argument("--db", default=str(ROOT / "legal_chroma_db"))
+    ap.add_argument("--db", default=str(EVAL_DB), help="production DB নয়: Chroma খুললেই file বদলায় (D-208)")
+    ap.add_argument("--queries", default=str(QUERIES), help="অন্য প্রশ্নের file, যেমন evals/golden/lay_queries.jsonl")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
@@ -107,12 +109,13 @@ def main() -> None:
     from chromadb.utils import embedding_functions
 
     cfg = load_config(CONFIG)
-    queries = load_queries(QUERIES)
+    query_path = Path(args.queries)
+    queries = load_queries(query_path)
     if args.language:
         queries = [q for q in queries if q.language == args.language]
     started = time.time()
     ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=cfg.embed_model)
-    client = chromadb.PersistentClient(path=args.db)
+    client = chromadb.PersistentClient(path=str(guard_db_path(Path(args.db))))
     collection = client.get_collection(args.collection, embedding_function=ef)
     store = ChunkStore.from_collection(collection)
     print(f"{args.collection}: {len(store.ids):,} chunks loaded in {time.time() - started:.0f}s", flush=True)
@@ -150,7 +153,8 @@ def main() -> None:
         "query_form": args.query_form,
         "systems": args.systems,
         "config": cfg.model_dump(),
-        "queries_sha256": hashlib.sha256(QUERIES.read_bytes()).hexdigest(),
+        "queries_file": query_path.name,
+        "queries_sha256": hashlib.sha256(query_path.read_bytes()).hexdigest(),
         "seconds_total": round(time.time() - started, 1),
         "case_chunks": dict(Counter(case_key(m["filename"]) for m in store.metas)),
         "snippets": snippets,

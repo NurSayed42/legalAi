@@ -117,7 +117,7 @@ def main() -> None:
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--collections", nargs="+", default=["bangladesh_judgements", "bangladesh_judgements_v2"])
-    ap.add_argument("--db", default=str(ROOT / "legal_chroma_db"))
+    ap.add_argument("--db", default=str(ROOT / "evals" / "cache" / "chroma_eval_copy"), help="production DB নয়: Chroma খুললেই file বদলায় (D-208)")
     ap.add_argument("--out", default=None)
     ap.add_argument("--snippets", type=int, default=3, help="প্রতি প্রশ্নে কয়টা ফল ছাপা হবে")
     args = ap.parse_args()

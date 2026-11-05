@@ -8,6 +8,12 @@ eval/run_eval.py
     python evals/run_eval.py --compare before after      # দুই run পাশাপাশি
 
 Result যায় evals/reports/<label>.json এ।
+
+Production API বা server ছাড়া আসল pipeline চালাতে (SPEC Phase 2, evals/README.md):
+
+    python evals/tools/make_eval_db.py                          # একবার: production DB এর যাচাই করা কপি
+    python evals/run_eval.py --system pipeline --collection v1 --limit 3    # fake LLM, শুধু পরিবেশ পরীক্ষা
+    python evals/run_eval.py --system pipeline --collection v1 --llm real --judge --dataset both --out evals/reports/pipeline_v1.json
 """
 
 import argparse
@@ -148,8 +154,27 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--label", help="এই run এর নাম, যেমন before / after")
     ap.add_argument("--compare", nargs=2, metavar=("A", "B"))
+    ap.add_argument("--system", choices=["pipeline", "agent"], help="server ছাড়া সরাসরি চালায়; না দিলে পুরনো API পদ্ধতি")
+    ap.add_argument("--collection", choices=["v1", "v2", "v3"], default="v1")
+    ap.add_argument("--dataset", choices=["golden", "adversarial", "both"], default="both")
+    ap.add_argument("--llm", choices=["fake", "real"], default="fake", help="fake এ network নেই, খরচ নেই, আর ফল baseline নয়")
+    ap.add_argument("--judge", action="store_true", help="faithfulness আর correctness এর LLM judge, শুধু --llm real এ")
+    ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--ids", nargs="*", default=None, help="শুধু এই প্রশ্নগুলো")
+    ap.add_argument("--db", default=None, help="production DB নয়, তার কপি")
+    ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
+    if args.system == "agent":
+        ap.error("the agent doesn't exist until Phase 5")
+    if args.system == "pipeline":
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from evals.pipeline_env import EVAL_DB
+        from evals.pipeline_eval import run_pipeline_eval
+
+        out = Path(args.out) if args.out else RESULTS_DIR / f"pipeline_{args.collection}_{args.llm}.json"
+        run_pipeline_eval(args.collection, args.dataset, args.llm, Path(args.db) if args.db else EVAL_DB, out, args.limit, args.judge, args.ids)
+        return
     if args.compare:
         compare(*args.compare)
         return

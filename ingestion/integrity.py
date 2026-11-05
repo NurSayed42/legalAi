@@ -8,6 +8,11 @@ Recovery এর সময় "কিছু নষ্ট হয়নি" অন�
   snapshot-chroma collection এর id, count, সব id/metadata/document এর hash, আর সব vector এর
                   exact hash (id অনুযায়ী)
   verify-chroma   উপরেরটার সাথে মেলানো
+  snapshot-files  DB folder এর প্রতিটা file এর size + SHA-256, Chroma না খুলে
+  verify-files    উপরেরটার সাথে মেলানো, Chroma না খুলে
+
+Chroma খুললেই chroma.sqlite3 বদলায়, শুধু পড়লেও: header এর দুই byte আর একটা page (D-208)। Content একই থাকে, কিন্তু file
+আর আগের মতো থাকে না। তাই production DB যাচাই করতে verify-files, আর content প্রমাণ করতে verify-chroma চালাও কপির উপর।
 
 HNSW file এর hash নেওয়া হয় না — Chroma খোলার সময় WAL flush করে সেগুলো লিখতে পারে, content না
 বদলালেও। Nearest-neighbour মিলিয়েও দেখা হয় না: approximate search একই DB তে কখনো কখনো ভিন্ন
@@ -40,6 +45,26 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: fh.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _db_files(db_path: Path) -> dict[str, list]:
+    return {p.relative_to(db_path).as_posix(): [p.stat().st_size, _sha256(p)] for p in sorted(db_path.rglob("*")) if p.is_file()}
+
+
+def snapshot_files(db_path: Path, out: Path) -> dict:
+    files = _db_files(db_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(files), encoding="utf-8")
+    return {"files": len(files), "bytes": sum(v[0] for v in files.values())}
+
+
+def verify_files(db_path: Path, snapshot: Path) -> dict:
+    """কোনো database library ছাড়া, শুধু file পড়ে। নতুন file ও পরিবর্তন হিসেবে গোনা হয়।"""
+    recorded = json.loads(snapshot.read_text(encoding="utf-8"))
+    current = _db_files(db_path)
+    changed = sorted(k for k in recorded.keys() & current.keys() if recorded[k] != current[k])
+    missing, added = sorted(recorded.keys() - current.keys()), sorted(current.keys() - recorded.keys())
+    return {"checked": len(recorded), "changed": changed, "missing": missing, "added": added, "ok": not (changed or missing or added)}
 
 
 def snapshot_text(text_dir: Path, out: Path) -> dict:
@@ -131,7 +156,7 @@ def verify_chroma(db_path: Path, snapshot: Path) -> dict:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=["snapshot-text", "verify-text", "snapshot-chroma", "verify-chroma"])
+    ap.add_argument("command", choices=["snapshot-text", "verify-text", "snapshot-chroma", "verify-chroma", "snapshot-files", "verify-files"])
     ap.add_argument("--text-dir", default=str(ROOT / "text_v2"))
     ap.add_argument("--db", default=str(ROOT / "legal_chroma_db"))
     ap.add_argument("--out")
@@ -143,6 +168,10 @@ def main():
         result = snapshot_text(Path(args.text_dir), Path(args.out))
     elif args.command == "verify-text":
         result = verify_text(Path(args.text_dir), Path(args.against))
+    elif args.command == "snapshot-files":
+        result = snapshot_files(Path(args.db), Path(args.out))
+    elif args.command == "verify-files":
+        result = verify_files(Path(args.db), Path(args.against))
     elif args.command == "snapshot-chroma":
         result = snapshot_chroma(Path(args.db), Path(args.out), args.collections)
     else:
