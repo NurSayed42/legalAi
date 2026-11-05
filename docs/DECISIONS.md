@@ -19,6 +19,8 @@ The laws collection is not exactly the original: on 2026-10-27 `clean_metadata.p
 
 ## Phase 2 — evaluation harness
 
+**D-210 — A local live view that leaves production alone.** The UI (`legal_ui_v2.html`) hardcodes `http://localhost:8000`, and starting the API there would open the production database. `evals/serve_live.py` serves the UI and the real pipeline from one process on port 8001 instead, using the evaluation copy through the read-only proxy, and it listens only on 127.0.0.1. Only the copy of the page sent to the browser changes its API address, so `legal_ui_v2.html` and `api_v3.py` stay as they are. It defaults to v1 because that's what production uses, and `--collection v3` is for looking only, not a migration. It's real, not a mock: questions call the LLM.
+
 **D-209 — Phase 3 is prepared but gated.** `evals/experiments/phase3_plan.json` lists E1 translation, E2 embedding models, E2b chunks that fit the model, E3 reranking BM25 alone, E4 normalization and E5 large documents. BM25 on v3 is the comparison point, as the user decided, and is not declared production-ready. `evals/run_experiment.py --run` and the embedding builder's `--run` refuse until `evals/experiment_gate.py` finds every positive label decided by a person and at least 90% of the lay top-10 results graded. Those are computed from files, so nobody can mark them ready by hand. Nothing here changes a production default, the cap or a collection. New vectors go to `evals/cache/embeddings`, never into ChromaDB.
 
 *Cost correction:* E3 is cheaper than it looked. Depths 10 and 20 are almost entirely cached for the benchmark queries.

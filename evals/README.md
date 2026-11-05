@@ -163,6 +163,10 @@ Word lists and limits are in `generation_config.json`. They're checks on wording
 
 Prompts are versioned in `llm/prompts/judge_faithfulness_v1.md` and `judge_correctness_v1.md`. The judge runs at temperature 0 through `llm/client.py`, which caches by prompt hash, and on a different provider from the generator when one is available. Each row records whether it was independent. The question, answer and sources are passed inside tags as untrusted data. A failed judge gives no score rather than zero, and failures are counted.
 
+## See it live
+
+`python evals/serve_live.py` serves the existing `legal_ui_v2.html` and the real pipeline from one process at `http://localhost:8001`, on the evaluation copy, listening only on this computer (D-210). It refuses port 8000. Questions in the UI make real LLM calls, about 2–3 per question. Search doesn't.
+
 ## Phase 3 preparation
 
 ```bash
