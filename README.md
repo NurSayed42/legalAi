@@ -2,6 +2,126 @@
 
 A retrieval-augmented generation (RAG) system that answers legal questions grounded in Bangladesh Supreme Court judgements and the full body of Bangladesh statutes, with explicit safeguards against hallucinated citations, weak retrieval, and overconfident predictions.
 
+<p align="center">
+  <a href="docs/screenshots/01-qa-answer.png"><img src="docs/screenshots/01-qa-answer.png" alt="LegalAI Bangladesh answering a question about bail in a murder case, in Bangla, with the applicable law cited" width="100%"></a>
+</p>
+
+<p align="center"><b>LegalAI Bangladesh</b>: ask a legal question in Bangla or English and get an answer built on real judgements and statutes, with its sources shown.</p>
+
+<p align="center">
+  <a href="#product-tour">Product tour</a> ·
+  <a href="#5-architecture--langgraph-pipeline">Architecture</a> ·
+  <a href="#9-evaluation--tests">Evaluation</a> ·
+  <a href="#12-getting-started">Run it</a>
+</p>
+
+| 8,615 | 1,399 | 67,971 | 8 nodes | 326 |
+|:---:|:---:|:---:|:---:|:---:|
+| High Court Division judgements | Bangladesh Acts | Indexed chunks | LangGraph pipeline | Offline tests |
+
+### What makes it more than a chatbot wrapper
+
+- **It refuses to guess.** When retrieval finds too little, it says so and asks for the missing facts, instead of writing a confident answer anyway.
+- **Citations are checked, not trusted.** A verifier compares what the model cites against what was actually retrieved, removes what doesn't match, and tells the reader.
+- **Numbers don't overstate.** The outcome figures come from a handful of similar cases, so the UI shows plain counts and a small-sample warning, not a win probability.
+- **It handles difficult data.** All 8,615 PDFs were re-extracted, some over 16,000 pages, with OCR for pages whose Bangla is stored in legacy fonts.
+- **Decisions are measured.** Four retrieval methods were compared on 95 Bangla and English queries under a rule fixed before the runs. The results are provisional, because a person hasn't reviewed the relevance labels yet ([section 9](#9-evaluation--tests)).
+
+---
+
+## Product tour
+
+There's no public demo. The backend needs about 5 GB of RAM (estimated) for its reranker and keyword index, and hosting hasn't been set up. These screenshots show the real system running locally with real LLM calls, which is what the `পরীক্ষার কপি` ("test copy") label in the header means.
+
+Answers are shown as the system produced them and haven't been reviewed by a lawyer. **This is a research tool, not legal advice.** Judgement names that identify people have been cropped out.
+
+### 1. Ask a question, get the law behind the answer
+
+The short answer comes first, then each applicable section: what it says, how it applies, and a link to the source.
+
+<table>
+<tr>
+<td width="50%" valign="top"><a href="docs/screenshots/02-qa-law-citations.png"><img src="docs/screenshots/02-qa-law-citations.png" alt="Cards citing Section 498 of the Code of Criminal Procedure and Section 302 of the Penal Code" width="100%"></a><br><sub>Each cited section, explained and linked to bdlaws.minlaw.gov.bd</sub></td>
+<td width="50%" valign="top"><a href="docs/screenshots/03-qa-procedure.png"><img src="docs/screenshots/03-qa-procedure.png" alt="Step-by-step bail procedure with the court and deadline" width="100%"></a><br><sub>Step-by-step procedure, with the court, deadline, cost and consequences</sub></td>
+</tr>
+</table>
+
+<a href="docs/screenshots/04-qa-risks-follow-ups.png"><img src="docs/screenshots/04-qa-risks-follow-ups.png" alt="Risks, when to see a lawyer, follow-up questions and answer actions" width="100%"></a>
+<br><sub>Risks, when to see a lawyer, and follow-up questions, plus copy, regenerate and feedback actions</sub>
+
+### 2. It asks before it answers
+
+This is the behaviour the project is built around. With too little to go on, the first response says no answer will be guessed, and asks for the missing facts. Each reply is added to the situation, and the analysis only runs on what it can support.
+
+<table>
+<tr>
+<td width="33%" valign="top"><a href="docs/screenshots/05-predict-asks-first.png"><img src="docs/screenshots/05-predict-asks-first.png" alt="The system says it found too few sources and asks follow-up questions" width="100%"></a><br><sub><b>1.</b> Too little matched, so it asks instead of guessing</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/06-predict-follow-up.png"><img src="docs/screenshots/06-predict-follow-up.png" alt="The person's answers added to the situation, with another follow-up question" width="100%"></a><br><sub><b>2.</b> Answers are added to the situation</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/07-predict-past-outcomes.png"><img src="docs/screenshots/07-predict-past-outcomes.png" alt="Past outcomes as plain counts with a small-sample warning, followed by the analysis" width="100%"></a><br><sub><b>3.</b> Now it answers, with plain counts and a small-sample warning</sub></td>
+</tr>
+</table>
+
+### 3. The evidence behind the analysis
+
+<table>
+<tr>
+<td width="50%" valign="top"><a href="docs/screenshots/08-predict-laws.png"><img src="docs/screenshots/08-predict-laws.png" alt="Applicable sections from rent and property laws" width="100%"></a><br><sub>Applicable sections, and how each applies to this situation</sub></td>
+<td width="50%" valign="top"><a href="docs/screenshots/09-predict-cases.png"><img src="docs/screenshots/09-predict-cases.png" alt="Related High Court Division judgements with a one-line summary" width="100%"></a><br><sub>Related judgements, each with a one-line summary</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><a href="docs/screenshots/10-predict-procedure.png"><img src="docs/screenshots/10-predict-procedure.png" alt="Procedure steps with court, deadline, cost and consequences" width="100%"></a><br><sub>What to do, in order</sub></td>
+<td width="50%" valign="top"><a href="docs/screenshots/11-predict-risks.png"><img src="docs/screenshots/11-predict-risks.png" alt="Risks citing the related judgements, then advice on seeing a lawyer" width="100%"></a><br><sub>Risks, tied back to the judgements they come from</sub></td>
+</tr>
+</table>
+
+### 4. Search judgements and statutes
+
+<a href="docs/screenshots/12-search.png"><img src="docs/screenshots/12-search.png" alt="Search screen with a search box, filters for case type, year and outcome, and suggested searches" width="100%"></a>
+<br><sub>Search in Bangla or English, with filters. Result screens aren't shown here, because they display judgement text.</sub>
+
+### 5. Draft legal documents
+
+Choose a document type, get a list of the facts it needs, and review the draft before copying, downloading or printing it. Sample details were used here.
+
+<table>
+<tr>
+<td width="50%" valign="top"><a href="docs/screenshots/13-docs-choose-type.png"><img src="docs/screenshots/13-docs-choose-type.png" alt="Seven document types to choose from" width="100%"></a><br><sub>Seven document types</sub></td>
+<td width="50%" valign="top"><a href="docs/screenshots/14-docs-details-empty.png"><img src="docs/screenshots/14-docs-details-empty.png" alt="The details step listing the facts an affidavit needs" width="100%"></a><br><sub>The facts each type needs</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><a href="docs/screenshots/15-docs-details.png"><img src="docs/screenshots/15-docs-details.png" alt="Sample details entered for an affidavit" width="100%"></a><br><sub>Details entered</sub></td>
+<td width="50%" valign="top"><a href="docs/screenshots/16-docs-generated.png"><img src="docs/screenshots/16-docs-generated.png" alt="The start of a generated affidavit on a paper-style panel" width="100%"></a><br><sub>The generated draft (top of the page)</sub></td>
+</tr>
+</table>
+
+### 6. Works on a phone, in light or dark
+
+<table>
+<tr>
+<td width="33%" valign="top"><a href="docs/screenshots/17-phone-qa-dark.png"><img src="docs/screenshots/17-phone-qa-dark.png" alt="Q&A home screen on a phone, dark theme" width="100%"></a><br><sub>Q&A</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/18-phone-predict-dark.png"><img src="docs/screenshots/18-phone-predict-dark.png" alt="Outcome screen on a phone, dark theme" width="100%"></a><br><sub>Outcome analysis</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/19-phone-docs-light.png"><img src="docs/screenshots/19-phone-docs-light.png" alt="Document generator on a phone, light theme" width="100%"></a><br><sub>Document generator</sub></td>
+</tr>
+</table>
+
+<a href="docs/screenshots/20-desktop-dark.png"><img src="docs/screenshots/20-desktop-dark.png" alt="Q&A home screen on desktop, dark theme" width="100%"></a>
+
+### Frontend: before and after the rebuild
+
+The UI was rebuilt from a single HTML file into Vite, React, TypeScript and Tailwind, without changing the API. All 10 request scenarios tested send the same bodies as before. Design system: [`frontend/DESIGN.md`](frontend/DESIGN.md).
+
+| Lighthouse, mobile | Old page | New UI |
+|---|:---:|:---:|
+| Performance | 34 | **88** |
+| Accessibility | 78 | **100** |
+| Best practices | 96 | **100** |
+| SEO | 90 | **100** |
+| Largest contentful paint | 9.9 s | **3.0 s** |
+| Cumulative layout shift | 0.119 | **0** |
+| Page width on a 360 px phone | 739 px | **360 px** |
+
+<sub>Lighthouse 13 with simulated throttling, on localhost, so real-world numbers will differ. The new UI was served by a small static server with a stubbed stats endpoint.</sub>
+
 ---
 
 ## 1. Problem Statement
@@ -31,6 +151,7 @@ The system works end to end, and the upgrade to a measured, agentic assistant ([
 | 2. Evaluation harness | Partly done. The retrieval comparison and the generation, citation and abstention metrics exist. Human review of the labels and a baseline with real LLM calls are still to come. |
 | 3. Retrieval upgrades | Planned, not started. |
 | 4–8. Knowledge graph, agent, verification, production, docs | Not started. |
+| Web UI | Rebuilt in `frontend/`, ahead of the phase order. |
 
 The API still runs on the v1 index. BM25 did best in the benchmark so far, but it's a comparison point, not a production decision.
 
@@ -155,6 +276,7 @@ finalize           → fixed answer structure; citations still failing are remov
 | Layer | Technology |
 |---|---|
 | Orchestration | LangGraph (`StateGraph`, conditional edges) |
+| Frontend | Vite, React 18, strict TypeScript, Tailwind CSS, Radix UI (`frontend/`) |
 | API | FastAPI (`api_v3.py`), rules in `legal_rules.py` |
 | LLMs | Gemini (primary, schema-constrained JSON), Groq — `openai/gpt-oss-120b` (fallback) |
 | Retrieval | ChromaDB (vector) + `rank-bm25` (keyword), merged via Reciprocal Rank Fusion |
@@ -225,6 +347,8 @@ The evaluation data (`evals/golden/`), the detailed reports (`evals/reports/`) a
 - **Bangla queries barely reach English judgements** — most relevant judgements are in English, and on the retrieval benchmark raw Bangla queries find very few of them with any method. The API's LLM rewrite may help, but that isn't measured yet.
 - **Inline citations** are flagged, not removed — removing a section number from the middle of a sentence would garble it.
 - **Statute currency** — repealed/amended sections aren't tracked yet.
+- **Document generator** — it finds laws from the document type alone, so some are irrelevant. The UI marks them for checking, but a draft can still cite them in its own text. Tables and block quotes in a draft aren't formatted yet and appear as raw Markdown.
+- **Not deployed** — the backend needs about 5 GB of RAM (estimated, not measured on Linux), and nothing has been hosted yet.
 
 ---
 

@@ -1,0 +1,25 @@
+{
+  "url": "http://localhost:4173/",
+  "label": "after",
+  "lighthouseVersion": "13.6.0",
+  "formFactor": "mobile",
+  "throttling": "simulate",
+  "categories": {
+    "performance": 88,
+    "accessibility": 100,
+    "best-practices": 100,
+    "seo": 100
+  },
+  "metrics": {
+    "FCP_ms": 766,
+    "LCP_ms": 3013,
+    "TBT_ms": 296,
+    "CLS": 0,
+    "SI_ms": 1348,
+    "totalByteWeight_KB": 276
+  },
+  "failedAudits": [
+    "performance: largest-contentful-paint (3.0 s)",
+    "performance: total-blocking-time (300 ms)"
+  ]
+}

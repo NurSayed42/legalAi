@@ -19,6 +19,8 @@ The laws collection is not exactly the original: on 2026-10-27 `clean_metadata.p
 
 ## Frontend
 
+**D-213 — README screenshots.** The README carries a product tour because there's no public demo. Real answers can show judgement file names in `case_no`, and those can name real people, so two screenshots were cropped to remove case cards (D-211). The rows were removed rather than blurred, the files were rebuilt from pixels so no metadata carries over, and every image was read by eye and by OCR. Search results aren't shown, because they display judgement text. Case numbers with one-line AI summaries remain in one screenshot, since they identify no one. The generated-document screenshot stops before raw Markdown tables, a known rendering gap listed in the README's limitations.
+
 **D-212 — A rebuilt UI, with some of the brief changed so it can't mislead.** The user asked for a Vite, React and Tailwind rebuild ("Ink & Brass") with frozen API payloads, ahead of SPEC order: SPEC puts UI work in Phase 7, against `legal_ui_v2.html`, and Phase 2 human review is still open. The user approved these changes to the brief on 2026-11-05, because the original versions would overstate what the data supports:
 
 - *No win-probability ring.* `win_rate_pct` is computed from at most `N_CASES_FINAL` (4) cases chosen for topic similarity, with unknown outcomes in the total, so a ring could read 0% from one case. The UI shows plain counts and a won/lost/other bar.
