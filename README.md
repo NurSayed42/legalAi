@@ -21,6 +21,19 @@ The real cost of these failure modes isn't a bad demo — it's a wrong legal opi
 
 This project builds a legal research assistant that treats *trustworthiness* as the primary design constraint, not an afterthought bolted on at the end. Every answer is traceable to a real judgement or statute section; every citation the model generates is checked against the actual retrieved text before it reaches the user; the system explicitly measures whether it found enough to answer at all, and says so when it hasn't; and when precedent genuinely conflicts, that conflict is surfaced instead of papered over. In short: it's built to know the difference between "I found a clear answer" and "I'm guessing" — and to never present the second as the first.
 
+### Project status
+
+The system works end to end, and the upgrade to a measured, agentic assistant ([`SPEC.md`](SPEC.md)) is in progress.
+
+| Phase | State |
+|---|---|
+| 1. Data foundation | Done. All judgements re-extracted, with a re-OCRed v3 index built and verified. |
+| 2. Evaluation harness | Partly done. The retrieval comparison and the generation, citation and abstention metrics exist. Human review of the labels and a baseline with real LLM calls are still to come. |
+| 3. Retrieval upgrades | Planned, not started. |
+| 4–8. Knowledge graph, agent, verification, production, docs | Not started. |
+
+The API still runs on the v1 index. BM25 did best in the benchmark so far, but it's a comparison point, not a production decision.
+
 ---
 
 ## 3. Data
@@ -45,8 +58,8 @@ The strict rules add lost OCR lines and corrupted Bangla. v1 wasn't measured on 
 Indexes: `bangladesh_judgements` (v1, 45,571 chunks, used by the API), `bangladesh_judgements_v2` (42,762 chunks) and `bangladesh_judgements_v3` (34,217 chunks). Neither v2 nor v3 is used by the API yet. Full results are in [`data_quality/phase1_data_quality.md`](data_quality/phase1_data_quality.md).
 
 **Known data gaps:**
-- **Bangla search relevance is poor:** in vector search on v3, only 10 of 100 top results contain the query's key term, against 34 of 50 in English. BM25 and the reranker haven't been tested on v3.
-- **One case is capped in v3:** Death Reference 58/2013 no longer swamps Bangla search (the most results one case takes fell from 10 of 10 to 3), but 96% of its chunks aren't indexed and 2 of 6 queries about it no longer find it. Its full text is in `text_v3/`.
+- **Bangla search is the weakest part:** raw Bangla queries score well below English with every method, and they reach very few of the relevant judgements written in English (section 9).
+- **One case is capped in v3:** Death Reference 58/2013 no longer swamps search, but 96% of its chunks aren't indexed. BM25 still ranks the case first on questions about its content, while many specific passages can't be reached through the index. Its full text is in `text_v3/`.
 - **OCR isn't perfect:** Latin junk on legacy-font pages is unchanged (`মূল OTR`), and 47 files are still below 95% line retention. The 8,162 files copied from v2 weren't re-OCRed.
 - 133 extra files have text identical to another file, and 10 PDFs contain each page 2–3 times.
 - PDFs with no text layer at all were dropped by `extract_text.py` and are still missing from the corpus.
@@ -65,7 +78,7 @@ Indexes: `bangladesh_judgements` (v1, 45,571 chunks, used by the API), `banglade
   - A before/after report goes to `evals/reports/metadata_report.json`.
 - **Chunking** — judgements are split 600 words per chunk with an 80-word overlap. Laws use section-level granularity — each Act section is its own document.
 - **Embedding model** — `paraphrase-multilingual-MiniLM-L12-v2`, chosen because queries and sources mix Bangla and English. It truncates input at 128 tokens, so only the start of each judgement chunk is embedded; BM25 and the reranker see more of it.
-- **Vector store** — ChromaDB (persistent, cosine), two collections: `bangladesh_judgements` and `bangladesh_laws`.
+- **Vector store** — ChromaDB (persistent, cosine). The API uses `bangladesh_judgements` and `bangladesh_laws`; `bangladesh_judgements_v2` and `_v3` exist for evaluation.
 
 ---
 
@@ -125,7 +138,7 @@ finalize           → fixed answer structure; citations still failing are remov
 | Design choice | Reasoning |
 |---|---|
 | RAG instead of fine-tuning | Case law and statutes change; RAG lets the knowledge base update independently of the model. |
-| Hybrid retrieval (vector + BM25) via RRF | Vector search alone misses exact section numbers and case citations; BM25 alone misses conceptually similar cases phrased differently. RRF combines rankings without hand-tuned weights. |
+| Hybrid retrieval (vector + BM25) via RRF | Vector search alone misses exact section numbers and case citations; BM25 alone misses conceptually similar cases phrased differently. RRF combines rankings without hand-tuned weights. On the Phase 2 benchmark's keyword-style queries, hybrid actually scored below BM25 alone (section 9). Lay questions aren't measured yet. |
 | Legal alias dictionary + LLM sub-queries | Users write "chek dishonour hole ki korbo"; the statutes say "dishonour of cheque for insufficiency of funds". Without expansion, Bangla questions retrieved unrelated Bangla Acts (the Copyright Act for a cheque question). |
 | Cross-encoder reranker | RRF is rank-only, so it can't say whether anything relevant was found. The reranker scores each chunk against the question; calibration showed relevant pairs at 0.29–0.74 and irrelevant ones ≤ 0.03. It reranks against the English sub-query because it scored the right NI Act section near zero against the raw Bangla/Banglish question. |
 | Precedent hierarchy weighting | An Appellate Division ruling should outrank a High Court Division observation. (The corpus is HCD-only today, so only the recency bonus has an effect.) |
@@ -165,14 +178,15 @@ finalize           → fixed answer structure; citations still failing are remov
 ## 9. Evaluation & Tests
 
 ```bash
-python -m pytest tests/test_rules.py tests/test_pdf_extract.py -q   # rules and extraction crash-safety, no server needed
+python -m pytest tests --ignore=tests/test_regression.py -q   # all offline tests, no server or LLM
 uvicorn api_v3:app --port 8000                  # then, in another terminal:
 python -m pytest tests/test_regression.py -v     # 4 live questions: cheque dishonour procedure,
                                                 # murder bail, "Section 302", divorce procedure
 python evals/run_eval.py --label after           # 20 questions → evals/reports/after.json
 python evals/run_eval.py --compare before after  # side-by-side summary
 python evals/retrieval_smoke.py                  # v1 vs v2 vector search on 10 questions, no API or LLM
-python evals/retrieval_score.py                  # retrieval benchmark, no API or LLM (evals/README.md)
+python evals/retrieval_run.py --collection bangladesh_judgements_v3 --out evals/runs/v3.json   # retrieval benchmark, about 55 minutes
+python evals/retrieval_score.py                  # scores that run in seconds (evals/README.md)
 python evals/run_eval.py --system pipeline --limit 3   # the pipeline with a fake LLM, no server, on a copy of the DB
 python evals/run_experiment.py --status          # what Phase 3's experiments are waiting for
 ```
@@ -186,7 +200,11 @@ python evals/run_experiment.py --status          # what Phase 3's experiments ar
 | Hybrid | 0.312 | 0.670 | 1.1 |
 | Hybrid + reranker | 0.546 | 0.843 | 36 |
 
-The full results and recommendations are in [`evals/reports/phase2_retrieval_comparison.md`](evals/reports/phase2_retrieval_comparison.md). The API doesn't use these results yet.
+Under a rule fixed before the runs, BM25 beat dense and hybrid in both languages, and the reranker improved hybrid. Hybrid + reranker vs BM25 wasn't a declared comparison and shows no measured difference. The embedding model reads only about the first 80 of each chunk's 600 words, which may explain part of dense search's score.
+
+The full results and recommendations are in [`evals/reports/phase2_retrieval_comparison.md`](evals/reports/phase2_retrieval_comparison.md), and what's still outstanding is in [`evals/reports/phase2_status.md`](evals/reports/phase2_status.md). The API doesn't use these results yet.
+
+**Also in `evals/`:** 22 lay-language queries, still being graded so no results yet; generation, citation and abstention metrics, with draft golden and adversarial sets, not yet run with a real LLM; and a Phase 3 experiment plan that won't run until the labels are reviewed.
 
 `run_eval.py` logs, per question: retrieved laws and cases, `applicable_laws` count, `citation_verified`, unverified citations, retrieval attempts, sufficiency, persona-claim detection and latency.
 
@@ -194,10 +212,10 @@ The full results and recommendations are in [`evals/reports/phase2_retrieval_com
 
 ## 10. Known Limitations / Future Work
 
-- **Latency on CPU** — the reranker costs ~0.4 s per (query, chunk) pair even int8-quantized, and Gemini's free tier often takes 10+ s per call; a typical answer takes about a minute on a 4-core CPU. A GPU or a hosted reranker would cut most of this.
+- **Latency on CPU** — the reranker costs about 0.4–0.7 s per (query, chunk) pair even int8-quantized, and Gemini's free tier often takes 10+ s per call; a typical answer takes about a minute on a 4-core CPU. A GPU or a hosted reranker would cut most of this.
 - **Gemini free-tier rate limit** — 15 requests/minute per model. Each answer uses 2–3 calls; under load the Groq fallback takes over.
 - **High Court Division only** — no Appellate Division judgements in the corpus yet, so the AD > HCD weight has nothing to act on.
-- **The API still uses v1**, where ~2,800 judgements contain legacy-font mojibake. v2 fixes that but has the gaps listed in section 3.
+- **The API still uses v1**, where ~2,800 judgements contain legacy-font mojibake, so it can't find Bangla case numbers or party names. v2 and v3 fix that, but neither has been tested through the full pipeline with real LLM calls.
 - **OCR accuracy** — on clean Bangla: 97.1% character similarity, 87.9% word recall. Accuracy on legacy-font pages has only been hand-checked on one page, and OCR adds some Latin junk to Bangla text.
 - **Outcome coverage** — the rule-based extractor can't determine the outcome for ~53% of judgements (`unknown`), which limits `outcome_stats` and contradiction detection.
 - **Reranker threshold** (`RERANK_THRESHOLD = 0.05`) was set from a small calibration probe, not tuned on real query logs.
@@ -220,13 +238,14 @@ enrich_judgements.py      # Judgement metadata + judgements collection (uses cle
 api_v3.py                 # FastAPI app + LangGraph pipeline (current)
 legal_rules.py            # Alias dictionary, intent rules, persona check, answer schema
 api_v2.py                 # Previous API version
-legal_ui_v2.html          # Single-file web UI for the API
+legal_ui_v2.html          # Single-file web UI for the API (React from a CDN, no build step)
 ingestion/                # pdf_extract.py (extraction cascade), run_phase1.py (full run, safe to re-run),
                           # quality_audit.py, text_checks.py (quality), integrity.py (proves nothing changed)
 data_quality/             # phase1_data_quality.md (report), audits, text checks
 retrieval/                # hybrid.py, rerank.py and Phase 3 variants, for evaluation only, not used by the API
 llm/                      # client.py (retry, fallback, cache, token log) and prompts, for evaluation only so far
-evals/                    # README.md, run_eval.py, retrieval_*.py, pipeline_*.py, run_experiment.py, golden/, metrics/, tools/, experiments/, reports/
+evals/                    # README.md, run_eval.py, retrieval_*.py, pipeline_*.py, run_experiment.py, serve_live.py,
+                          # golden/, metrics/, tools/, experiments/, reports/
 tests/                    # offline tests, plus test_regression.py (live server)
 docs/DECISIONS.md         # assumptions and design decisions
 SPEC.md                   # upgrade plan (phases 1–8)
@@ -257,6 +276,7 @@ python build_laws_vectordb.py     # laws collection
 python clean_metadata.py --subjects --apply   # cleanup + LLM subject labels + Bangla section numbers
 python enrich_judgements.py --text raw --labels regex   # v1 judgements collection
 python ingestion/run_phase1.py --workers 2              # re-extract, audit, build the v2 collection
+python ingestion/run_v3.py --workers 2                  # re-OCR the files that need it, build the v3 collection
 ```
 
 `run_phase1.py` needs the Tesseract binary with `ben` and `eng` data, and can take many hours on a CPU (the corpus has PDFs of 11,407 and 16,560 pages). It saves progress, so it's safe to re-run after an interruption; stop the API first.
@@ -267,6 +287,15 @@ Run the API and open the UI (the first start downloads the ~2.3 GB reranker):
 uvicorn api_v3:app --port 8000
 # then open legal_ui_v2.html in a browser (it calls http://localhost:8000)
 ```
+
+To see the working system without starting the API or opening the main database, run the UI and the real pipeline together on a copy:
+
+```bash
+python evals/tools/make_eval_db.py      # once: copies the database, about 3.8 GB
+python evals/serve_live.py              # takes about 3 minutes to load, then open http://localhost:8001
+```
+
+It listens only on your own computer and uses v1 data by default; add `--collection v3` to try v3. Q&A, Outcome Prediction and Document Generator make real LLM calls when you use them, so they need your API keys. Case & Law Search doesn't.
 
 ---
 
