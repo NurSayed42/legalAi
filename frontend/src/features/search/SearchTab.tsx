@@ -278,7 +278,7 @@ export default function SearchTab({ active }: { active: boolean }) {
             placeholder="যেমন চেক ডিজঅনার, section 302…"
             enterKeyHint="search"
             autoComplete="off"
-            className="h-12 w-full min-w-0 rounded-card border border-line-strong bg-field pl-10 pr-20 text-16 text-fg-1 transition hover:border-fg-3 focus-visible:border-transparent [&::-webkit-search-cancel-button]:hidden"
+            className="h-12 w-full min-w-0 rounded-card border border-line-strong bg-field pl-10 pr-11 text-16 lg:pr-20 text-fg-1 transition hover:border-fg-3 focus-visible:border-transparent [&::-webkit-search-cancel-button]:hidden"
           />
           <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-1">
             {query ? (
@@ -296,7 +296,7 @@ export default function SearchTab({ active }: { active: boolean }) {
             ) : (
               !coarse && (
                 <span className="hidden gap-1 pr-2 lg:flex" aria-hidden="true">
-                  <Kbd>Ctrl</Kbd>
+                  <Kbd>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl"}</Kbd>
                   <Kbd>K</Kbd>
                 </span>
               )
@@ -310,20 +310,20 @@ export default function SearchTab({ active }: { active: boolean }) {
           loading={loading}
           disabled={!query.trim()}
           aria-label="খুঁজুন"
-          className="px-4 md:px-6"
+          className="!px-4 md:!px-6"
           icon={<Search size={18} strokeWidth={1.75} aria-hidden="true" className="xs:hidden" />}
         >
           <span className="hidden xs:inline">খুঁজুন</span>
         </Button>
       </form>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2">
         <SegmentedControl
           label="কোথায় খুঁজবেন"
           value={searchType}
           options={TYPE_OPTIONS}
           onChange={changeType}
-          className="w-full xs:w-auto"
+          className="min-w-0 flex-1 md:flex-none"
         />
         {desktop ? (
           <div className="flex min-w-0 flex-1 gap-2">
@@ -341,12 +341,12 @@ export default function SearchTab({ active }: { active: boolean }) {
             ))}
           </div>
         ) : (
-          <FilterPanel title="ছাঁকনি" fields={FIELDS} values={filters} onApply={applyFilters} />
+          <FilterPanel iconOnly bordered title="ফিল্টার" fields={FIELDS} values={filters} onApply={applyFilters} />
         )}
       </div>
 
       {activeFilters.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2" aria-label="চালু ছাঁকনি">
+        <div className="flex flex-wrap items-center gap-2" aria-label="চালু ফিল্টার">
           {activeFilters.map(([key, value]) => (
             <FilterChip
               key={key}
@@ -386,7 +386,7 @@ export default function SearchTab({ active }: { active: boolean }) {
         {!loading && !error && empty && (
           <EmptyState icon={<SearchX size={24} strokeWidth={1.75} aria-hidden="true" />} title="কিছু পাওয়া যায়নি">
             <p>
-              অন্য শব্দে খুঁজে দেখুন, বা ছাঁকনি সরিয়ে দিন। বাংলায় না পেলে ইংরেজিতে খুঁজুন, কারণ বেশিরভাগ রায়
+              অন্য শব্দে খুঁজে দেখুন, বা ফিল্টার সরিয়ে দিন। বাংলায় না পেলে ইংরেজিতে খুঁজুন, কারণ বেশিরভাগ রায়
               ইংরেজিতে।
             </p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
@@ -401,10 +401,13 @@ export default function SearchTab({ active }: { active: boolean }) {
 
         {!loading && cases.length > 0 && (
           <section className="flex flex-col gap-3" aria-label="মামলা">
-            <h2 className="flex items-center gap-2 text-16 text-fg-1">
-              <Landmark size={18} strokeWidth={1.75} className="text-fg-3" aria-hidden="true" />
-              মামলা <span className="font-normal text-fg-3">{bnDigits(cases.length)}টি</span>
-            </h2>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+              <h2 className="flex items-center gap-2 text-16 text-fg-1">
+                <Landmark size={18} strokeWidth={1.75} className="text-fg-3" aria-hidden="true" />
+                মামলা <span className="font-normal text-fg-3">{bnDigits(cases.length)}টি</span>
+              </h2>
+              <p className="text-14 text-fg-3">মিল: এই তালিকার সেরা ফলাফলের তুলনায়</p>
+            </div>
             {cases.map((item, i) => (
               <CaseCard key={`${item.case_no}-${i}`} item={item} query={searchedQuery} top={topCase} />
             ))}

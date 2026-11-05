@@ -44,15 +44,20 @@ export function CopyButton({
     <Button
       size="sm"
       variant="ghost"
-      className={compact ? "px-1 md:px-3" : undefined}
+      className={compact ? "!px-1 md:!px-3" : undefined}
       aria-label={copied ? "কপি হয়েছে" : "কপি করুন"}
       icon={icon}
       onClick={copy}
     >
       {/* Reserves the longer label's width, so the button doesn't jump when it changes. */}
-      <span className={compact ? "inline-block min-w-[3em] text-left" : "inline-block min-w-[5.5em] text-left"}>
-        {shown}
-      </span>
+      {compact ? (
+        <>
+          <span className="inline-block min-w-[3em] text-left md:hidden">{shown}</span>
+          <span className="hidden min-w-[5.5em] text-left md:inline-block">{copied ? "কপি হয়েছে" : "কপি করুন"}</span>
+        </>
+      ) : (
+        <span className="inline-block min-w-[5.5em] text-left">{shown}</span>
+      )}
     </Button>
   );
 }

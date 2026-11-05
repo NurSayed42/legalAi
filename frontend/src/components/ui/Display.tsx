@@ -94,10 +94,12 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className="flex flex-col items-start gap-3 rounded-card border border-danger bg-danger-tint p-4 xs:flex-row xs:items-center"
+      className="flex flex-wrap items-center gap-3 rounded-card border border-danger bg-danger-tint p-4"
     >
-      <CircleAlert size={20} strokeWidth={1.75} className="text-danger" aria-hidden="true" />
-      <p className="min-w-0 flex-1 text-14 text-fg-1">{message}</p>
+      <div className="flex min-w-[12rem] flex-1 items-start gap-2">
+        <CircleAlert size={20} strokeWidth={1.75} className="mt-0.5 text-danger" aria-hidden="true" />
+        <p className="min-w-0 flex-1 text-14 text-fg-1">{message}</p>
+      </div>
       {onRetry && (
         <Button size="sm" icon={<RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={onRetry}>
           {retryLabel}
@@ -168,7 +170,7 @@ export function SourceLink({ url }: { url?: string | null }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="hit-target relative inline-flex max-w-full items-center gap-1 rounded-sm font-mono text-13 text-fg-2 underline decoration-line-strong underline-offset-2 hover:text-fg-1"
+      className="hit-target relative inline-flex min-h-6 max-w-full items-center gap-1 rounded-sm font-mono text-13 text-fg-2 underline decoration-line-strong underline-offset-2 hover:text-fg-1"
       lang="en"
     >
       <span className="truncate">{hostOf(href)}</span>

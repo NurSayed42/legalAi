@@ -152,12 +152,14 @@ export function parseDocument(source: string): Block[] {
 
 export type Inline = { text: string; strong: boolean };
 
+// Only **bold**. Treating __text__ as bold would eat signature blanks: "মালিক: ____  ভাড়াটিয়া: ____".
+
 export function parseInline(text: string): Inline[] {
   return text
-    .split(/(\*\*[^*]+\*\*|__[^_]+__)/g)
+    .split(/(\*\*[^*]+\*\*)/g)
     .filter((part) => part !== "")
     .map((part) => {
-      const bold = part.match(/^(?:\*\*|__)(.+)(?:\*\*|__)$/);
+      const bold = part.match(/^\*\*(.+)\*\*$/);
       return bold ? { text: bold[1] ?? "", strong: true } : { text: part, strong: false };
     });
 }
@@ -171,8 +173,7 @@ export function stripMarkdown(source: string): string {
       line
         .replace(/^\s*#{1,6}\s+/, "")
         .replace(/^\s*([-*_])\1{2,}\s*$/, "")
-        .replace(/\*\*([^*]+)\*\*/g, "$1")
-        .replace(/__([^_]+)__/g, "$1"),
+        .replace(/\*\*([^*]+)\*\*/g, "$1"),
     )
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")

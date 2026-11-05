@@ -58,7 +58,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, Props>(function Composer
       aria-label="প্রশ্ন লিখুন"
     >
       <div className="glass flex items-end gap-1 rounded-panel border border-line-2 p-1.5 shadow-2 focus-within:border-gold-500">
-        <FilterPanel iconOnly title="ছাঁকনি" fields={FIELDS} values={filters} onApply={onFilters} />
+        <FilterPanel iconOnly title="ফিল্টার" fields={FIELDS} values={filters} onApply={onFilters} />
         <div className="min-w-0 flex-1 self-center">
           <label htmlFor="chat-input" className="sr-only">
             আপনার আইনি প্রশ্ন
@@ -73,7 +73,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, Props>(function Composer
             enterKeyHint={coarse ? "enter" : "send"}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="আপনার আইনি প্রশ্ন লিখুন…"
+            placeholder="আপনার প্রশ্ন লিখুন…"
             className="block px-1 py-[9px] leading-[26px] focus-visible:outline-none"
           />
           {nearLimit && (

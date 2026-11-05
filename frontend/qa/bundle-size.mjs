@@ -1,36 +1,45 @@
-// Gzipped size of what the first page load downloads, read from the built index.html. Budget: 120 KB of JS.
-//   node qa/bundle-size.mjs
+// Gzipped JS on first load, against the 120 KB budget. The default tab is Q&A, so its chunk and everything it
+// statically imports count too. Follows the real import graph, so a shared chunk can't be missed.
+//   node qa/bundle-size.mjs      (run after a build)
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DIST = join(HERE, "../dist");
+const ASSETS = join(HERE, "../dist/assets");
 const BUDGET_KB = 120;
-const gz = (file) => gzipSync(readFileSync(file)).length / 1024;
-const html = readFileSync(join(DIST, "index.html"), "utf-8");
-const initial = [...html.matchAll(/(?:src|href)="\/(assets\/[^"]+\.js)"/g)].map((m) => m[1]);
+const gz = (name) => gzipSync(readFileSync(join(ASSETS, name))).length / 1024;
+const files = readdirSync(ASSETS);
 
-// The default tab's chunk also loads on first paint, so it counts.
-const all = readdirSync(join(DIST, "assets"));
-const chatChunks = all.filter((f) => /^(ChatTab|AnswerCard)[-.].*\.js$/.test(f)).map((f) => `assets/${f}`);
-const css = all.filter((f) => f.endsWith(".css")).map((f) => [f, gz(join(DIST, "assets", f))]);
+const html = readFileSync(join(HERE, "../dist/index.html"), "utf-8");
+const entry = html.match(/<script[^>]+src="\/assets\/([^"]+\.js)"/)?.[1];
+const chat = files.find((f) => /^ChatTab-.*\.js$/.test(f));
+if (!entry || !chat) throw new Error("couldn't find the entry or the Q&A chunk");
 
-let total = 0;
-for (const f of [...new Set([...initial, ...chatChunks])]) {
-  const size = gz(join(DIST, f));
-  total += size;
-  console.log(`${size.toFixed(1).padStart(7)} KB  ${f}`);
-}
-console.log(`${total.toFixed(1).padStart(7)} KB  initial JS, gzipped (budget ${BUDGET_KB} KB)`);
-console.log("\nall JS chunks:");
-for (const f of all.filter((n) => n.endsWith(".js")))
-  console.log(
-    `${gz(join(DIST, "assets", f))
-      .toFixed(1)
-      .padStart(7)} KB  ${f}`,
-  );
+// Dynamic imports (lazy tabs, the bottom sheet) load later, so only static ones are followed.
+const STATIC_IMPORT =
+  /(?:^|[;}\s])(?:import\s*(?:[\w$*{}\s,]*?\s*from\s*)?|export\s*[\w$*{}\s,]*?\s*from\s*)["']\.\/([^"']+\.js)["']/g;
+const seen = new Set();
+const walk = (name) => {
+  if (seen.has(name)) return;
+  seen.add(name);
+  for (const match of readFileSync(join(ASSETS, name), "utf-8").matchAll(STATIC_IMPORT)) walk(match[1]);
+};
+walk(entry);
+walk(chat);
+
+const initial = [...seen].map((f) => [f, gz(f)]).sort((a, b) => b[1] - a[1]);
+const total = initial.reduce((sum, [, size]) => sum + size, 0);
+const later = files.filter((f) => f.endsWith(".js") && !seen.has(f));
+const css = files.filter((f) => f.endsWith(".css"));
+
+const row = (size, label) => console.log(`${size.toFixed(1).padStart(7)} KB  ${label}`);
+console.log("First load:");
+initial.forEach(([f, size]) => row(size, f));
+row(total, `initial JS, gzipped (budget ${BUDGET_KB} KB)`);
+console.log("\nLoaded later:");
+later.forEach((f) => row(gz(f), f));
 console.log("\nCSS:");
-for (const [f, s] of css) console.log(`${s.toFixed(1).padStart(7)} KB  ${f}`);
+css.forEach((f) => row(gz(f), f));
 process.exit(total > BUDGET_KB ? 1 : 0);

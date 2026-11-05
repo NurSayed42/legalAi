@@ -339,6 +339,7 @@ export default function ChatTab({ active }: { active: boolean }) {
                     <AiAvatar />
                   </div>
                   <div className="min-w-0 flex-1">
+                    <h2 className="sr-only">উত্তর</h2>
                     {item.status === "loading" && <Thinking />}
                     {item.status === "failed" && (
                       <ErrorState

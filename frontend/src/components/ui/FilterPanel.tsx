@@ -26,12 +26,14 @@ export function FilterPanel({
   values,
   onApply,
   iconOnly = false,
+  bordered = false,
 }: {
   title: string;
   fields: readonly FilterField[];
   values: FilterValues;
   onApply: (values: FilterValues) => void;
   iconOnly?: boolean;
+  bordered?: boolean;
 }) {
   const desktop = useIsDesktopNav();
   const [open, setOpen] = useState(false);
@@ -56,7 +58,7 @@ export function FilterPanel({
       onClick={desktop ? undefined : () => toggle(true)}
       className={
         iconOnly
-          ? "press relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded text-fg-2 hover:bg-field hover:text-fg-1"
+          ? `press relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded text-fg-2 hover:bg-field hover:text-fg-1 ${bordered ? "border border-line-2 bg-surface" : ""}`
           : "press relative inline-flex h-11 shrink-0 items-center gap-2 rounded border border-line-2 bg-raised px-3 text-14 font-medium text-fg-1 hover:border-line-strong hover:bg-field"
       }
     >

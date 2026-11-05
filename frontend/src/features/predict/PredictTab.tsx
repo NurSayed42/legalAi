@@ -201,6 +201,17 @@ export default function PredictTab(_: { active: boolean }) {
               placeholder="কী ঘটেছে, কী প্রমাণ আছে, কতদিন আগে…"
             />
           </div>
+          <Button
+            variant="primary"
+            size="lg"
+            loading={loading}
+            disabled={!situation.trim()}
+            className="w-full"
+            icon={<Gavel size={18} strokeWidth={1.75} aria-hidden="true" />}
+            onClick={() => void predict()}
+          >
+            বিশ্লেষণ করুন
+          </Button>
           <div className="min-w-0">
             <p className="mb-1 text-14 font-medium text-fg-2">উদাহরণ দিয়ে শুরু করুন</p>
             <div className="flex flex-col gap-2">
@@ -217,17 +228,6 @@ export default function PredictTab(_: { active: boolean }) {
               ))}
             </div>
           </div>
-          <Button
-            variant="primary"
-            size="lg"
-            loading={loading}
-            disabled={!situation.trim()}
-            className="w-full"
-            icon={<Gavel size={18} strokeWidth={1.75} aria-hidden="true" />}
-            onClick={() => void predict()}
-          >
-            বিশ্লেষণ করুন
-          </Button>
         </Card>
 
         <div

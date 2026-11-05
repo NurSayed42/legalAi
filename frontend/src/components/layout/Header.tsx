@@ -49,23 +49,25 @@ function StatsList() {
   const cases = stats?.judgements?.estimated_cases;
   const acts = stats?.laws?.total_acts;
   return (
-    <dl className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-4">
-        <dt className="flex items-center gap-2 text-14 text-fg-2">
-          <Landmark size={16} strokeWidth={1.75} aria-hidden="true" /> রায়
-        </dt>
-        <dd className="m-0 text-16 font-semibold text-accent">{cases ? bnNumber(cases) : "—"}</dd>
-      </div>
-      <div className="flex items-center justify-between gap-4">
-        <dt className="flex items-center gap-2 text-14 text-fg-2">
-          <BookOpen size={16} strokeWidth={1.75} aria-hidden="true" /> আইন
-        </dt>
-        <dd className="m-0 text-16 font-semibold text-accent">{acts ? bnNumber(acts) : "—"}</dd>
-      </div>
+    <div className="flex flex-col gap-3">
+      <dl className="m-0 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-4">
+          <dt className="flex items-center gap-2 text-14 text-fg-2">
+            <Landmark size={16} strokeWidth={1.75} aria-hidden="true" /> রায়
+          </dt>
+          <dd className="m-0 text-16 font-semibold text-accent">{cases ? bnNumber(cases) : "—"}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <dt className="flex items-center gap-2 text-14 text-fg-2">
+            <BookOpen size={16} strokeWidth={1.75} aria-hidden="true" /> আইন
+          </dt>
+          <dd className="m-0 text-16 font-semibold text-accent">{acts ? bnNumber(acts) : "—"}</dd>
+        </div>
+      </dl>
       <p className="border-t border-line-1 pt-3 text-14 text-fg-2">
         শুধু হাইকোর্ট বিভাগের রায়। সংগ্রহের বেশিরভাগ রায় ২০১০ সালের পরের।
       </p>
-    </dl>
+    </div>
   );
 }
 
@@ -118,7 +120,7 @@ function OverflowMenu() {
             <div className="flex flex-col gap-1">
               <Button
                 variant="ghost"
-                className="justify-start"
+                align="start"
                 icon={
                   theme === "dark" ? (
                     <Sun size={18} strokeWidth={1.75} aria-hidden="true" />
@@ -132,7 +134,7 @@ function OverflowMenu() {
               </Button>
               <Button
                 variant="ghost"
-                className="justify-start"
+                align="start"
                 icon={<Info size={18} strokeWidth={1.75} aria-hidden="true" />}
                 onClick={() => {
                   setOpen(false);
@@ -144,7 +146,7 @@ function OverflowMenu() {
               {canInstall && (
                 <Button
                   variant="ghost"
-                  className="justify-start"
+                  align="start"
                   icon={<Download size={18} strokeWidth={1.75} aria-hidden="true" />}
                   onClick={install}
                 >
@@ -162,6 +164,7 @@ function OverflowMenu() {
   );
 }
 
+/* The last icon's 44px hit area hangs past the content edge, so the glyph itself lines up with the column. */
 function DesktopActions() {
   const { theme, toggle } = useTheme();
   const { canInstall, install } = useInstallPrompt();
@@ -169,7 +172,7 @@ function DesktopActions() {
   const { stats } = useStats();
   const cases = stats?.judgements?.estimated_cases;
   return (
-    <div className="flex items-center gap-1">
+    <div className="-mr-3 flex items-center gap-1">
       {INSTANCE && (
         <span
           className="mr-2 hidden rounded-full border border-line-2 px-3 py-0.5 text-14 text-fg-2 xl:inline-block"
@@ -229,16 +232,12 @@ export function Header() {
   return (
     <header
       className={cn(
-        "glass sticky top-0 z-header h-[var(--header-h)] border-b border-line-1 px-4 transition-transform duration-slow md:px-6 lg:px-8",
+        "glass sticky top-0 z-header h-[var(--header-h)] border-b border-line-1 transition-transform duration-slow",
         hidden && "header-hidden",
       )}
     >
-      <div className="mx-auto flex h-full w-full max-w-content items-center justify-between gap-2">
-        <a
-          href="#qa"
-          className="flex min-w-0 items-center gap-2 rounded no-underline"
-          aria-label="LegalAI Bangladesh, প্রথম পাতা"
-        >
+      <div className="mx-auto flex h-full w-full max-w-content items-center justify-between gap-2 px-4 md:px-6 lg:px-8">
+        <a href="#qa" className="flex min-w-0 items-center gap-2 rounded no-underline">
           <BrandMark size={desktop ? "md" : "sm"} />
           <span className="min-w-0">
             <span
@@ -255,7 +254,7 @@ export function Header() {
         {desktop ? (
           <DesktopActions />
         ) : (
-          <div className="flex items-center gap-1">
+          <div className="-mr-3 flex items-center gap-1">
             <StatusDot />
             <OverflowMenu />
           </div>

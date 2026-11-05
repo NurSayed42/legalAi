@@ -59,10 +59,8 @@
     color: inherit;
     letter-spacing: inherit;
   }
+  /* No "border: 0" here: it would reset border-style too, and Tailwind's border utilities only set the width. */
   button {
-    background: none;
-    border: 0;
-    padding: 0;
     cursor: pointer;
   }
   button:disabled {

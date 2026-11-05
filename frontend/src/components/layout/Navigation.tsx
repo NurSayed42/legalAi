@@ -24,29 +24,31 @@ export function TabBar({ active }: { active: TabId }) {
   }, [active]);
 
   return (
-    <nav aria-label="প্রধান" className="glass sticky top-[var(--header-h)] z-nav border-b border-line-1 px-6 lg:px-8">
-      <Tabs.List ref={list} aria-label="বিভাগ" className="relative mx-auto flex max-w-content gap-1">
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <Tabs.Trigger
-              key={tab.id}
-              value={tab.id}
-              onPointerEnter={() => prefetchTab(tab.id)}
-              onFocus={() => prefetchTab(tab.id)}
-              className="press inline-flex h-12 items-center gap-2 rounded-t px-3 text-14 font-medium text-fg-2 hover:text-fg-1 focus-visible:-outline-offset-2 data-[state=active]:text-accent lg:px-4"
-            >
-              <Icon size={18} strokeWidth={1.75} aria-hidden="true" />
-              {tab.label}
-            </Tabs.Trigger>
-          );
-        })}
-        <span
-          aria-hidden="true"
-          className="absolute bottom-0 left-0 h-0.5 rounded-full bg-gold-500 transition-[transform,width] duration-slow"
-          style={{ width: bar.w, transform: `translateX(${bar.x}px)` }}
-        />
-      </Tabs.List>
+    <nav aria-label="প্রধান" className="glass sticky top-[var(--header-h)] z-nav border-b border-line-1">
+      <div className="mx-auto max-w-content px-6 lg:px-8">
+        <Tabs.List ref={list} aria-label="বিভাগ" className="relative -ml-3 flex gap-1">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <Tabs.Trigger
+                key={tab.id}
+                value={tab.id}
+                onPointerEnter={() => prefetchTab(tab.id)}
+                onFocus={() => prefetchTab(tab.id)}
+                className="press inline-flex h-12 items-center gap-2 rounded-t px-3 text-14 font-medium text-fg-2 hover:text-fg-1 focus-visible:-outline-offset-2 data-[state=active]:text-accent lg:px-4"
+              >
+                <Icon size={18} strokeWidth={1.75} aria-hidden="true" />
+                {tab.label}
+              </Tabs.Trigger>
+            );
+          })}
+          <span
+            aria-hidden="true"
+            className="absolute bottom-0 left-0 h-0.5 rounded-full bg-gold-500 transition-[transform,width] duration-slow"
+            style={{ width: bar.w, transform: `translateX(${bar.x}px)` }}
+          />
+        </Tabs.List>
+      </div>
     </nav>
   );
 }

@@ -55,7 +55,7 @@ const scenarios = {
   chat_with_filters: [
     "qa",
     async (p) => {
-      await p.getByRole("button", { name: "ছাঁকনি" }).click();
+      await p.getByRole("button", { name: "ফিল্টার" }).click();
       await pickRadix(p, "মামলার ধরন", "রিট পিটিশন");
       await pickRadix(p, "আদালত", "হাইকোর্ট বিভাগ");
       await pickRadix(p, "বছর", "২০১৫ থেকে");

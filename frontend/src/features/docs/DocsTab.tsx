@@ -134,6 +134,7 @@ function Stepper({
               type="button"
               disabled={!canGo(i)}
               aria-current={current ? "step" : undefined}
+              aria-label={`ধাপ ${bnDigits(i + 1)}: ${label}`}
               onClick={() => onGo(i)}
               className="press hit-target relative flex min-w-0 items-center gap-2 rounded text-14 disabled:cursor-default"
             >
@@ -155,7 +156,6 @@ function Stepper({
                   !current && !done && "text-fg-3",
                 )}
               >
-                <span className="sr-only">ধাপ {bnDigits(i + 1)}: </span>
                 {label}
               </span>
             </button>
@@ -430,16 +430,17 @@ export default function DocsTab(_: { active: boolean }) {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="px-1 md:px-3"
+                  className="!px-1 md:!px-3"
                   icon={<Download size={16} strokeWidth={1.75} aria-hidden="true" />}
                   onClick={download}
                 >
                   <span lang="en">.txt</span>
+                  <span className="hidden md:inline">নামান</span>
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="px-1 md:px-3"
+                  className="!px-1 md:!px-3"
                   icon={<Printer size={16} strokeWidth={1.75} aria-hidden="true" />}
                   onClick={() => window.print()}
                 >
@@ -448,12 +449,13 @@ export default function DocsTab(_: { active: boolean }) {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="px-1 md:px-3"
+                  className="!px-1 md:!px-3"
                   aria-label="আবার তৈরি করুন"
                   icon={<RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" />}
                   onClick={() => void generate()}
                 >
-                  আবার
+                  <span className="md:hidden">আবার</span>
+                  <span className="hidden md:inline">আবার তৈরি করুন</span>
                 </Button>
               </div>
               <article

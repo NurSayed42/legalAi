@@ -22,6 +22,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: keyof typeof SIZE;
   loading?: boolean;
   icon?: ReactNode;
+  align?: "center" | "start";
 }
 
 /** While loading, the label stays in the layout (hidden), so the button keeps its width. */
@@ -31,6 +32,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     size = "md",
     loading = false,
     icon,
+    align = "center",
     className,
     children,
     disabled,
@@ -46,7 +48,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        "press relative inline-flex select-none items-center justify-center whitespace-nowrap font-medium disabled:opacity-50",
+        "press relative inline-flex select-none items-center whitespace-nowrap font-medium disabled:opacity-50",
+        align === "start" ? "justify-start" : "justify-center",
         VARIANT[variant],
         SIZE[size],
         className,

@@ -93,6 +93,12 @@ test("plain text drops Markdown symbols and keeps signature blanks", () => {
   );
 });
 
+test("signature blanks survive, in the document and in plain text", () => {
+  const line = "মালিক: ______________   ভাড়াটিয়া: ______________";
+  assert.deepEqual(parseInline(line), [{ text: line, strong: false }]);
+  assert.equal(stripMarkdown(line), line);
+});
+
 test("language guess", () => {
   assert.equal(looksEnglish("Section 138 of the Act"), true);
   assert.equal(looksEnglish("ধারা ১৩৮ Act"), false);
