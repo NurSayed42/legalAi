@@ -34,7 +34,15 @@ from evals.metrics.retrieval import (  # noqa: E402
     rr_at_k,
     sign_flip_p,
 )
-from evals.retrieval_schema import BenchmarkQuery, RetrievalEvalConfig, grades_by_need, load_qrels, load_queries  # noqa: E402
+from evals.retrieval_schema import (  # noqa: E402
+    BenchmarkQuery,
+    RetrievalEvalConfig,
+    apply_human_decisions,
+    grades_by_need,
+    load_decisions,
+    load_qrels,
+    load_queries,
+)
 from evals.tools.corpus import doc_script, load_corpus  # noqa: E402
 
 GOLDEN = ROOT / "evals" / "golden"
@@ -119,19 +127,24 @@ def declared_tests(per_query: dict, queries: list[BenchmarkQuery], cfg: Retrieva
             xs = [per_query[q.id][a][cfg.primary_metric] or 0.0 for q in subset]
             ys = [per_query[q.id][b][cfg.primary_metric] or 0.0 for q in subset]
             diff, low, high = paired_bootstrap_ci(xs, ys, clusters, cfg.bootstrap_samples, cfg.seed)
+            pooled = [q for q in subset if q.group != "known_item"]  # known-item এ লক্ষ্য জানা, বাকি ফল বিচার করার দরকার নেই
+            judged = min((mean([per_query[q.id][s]["judged"] for q in pooled]) or 0.0 for s in (a, b)), default=0.0) if pooled else 1.0
             p = sign_flip_p(xs, ys, clusters, cfg.permutation_samples, cfg.seed)
             name = f"{a} vs {b} [{language}]"
             raw[name] = p
             wins = sum(x > y + 1e-9 for x, y in zip(xs, ys))
             losses = sum(y > x + 1e-9 for x, y in zip(xs, ys))
             rows.append({"name": name, "a": a, "b": b, "language": language, "n_queries": len(subset), "n_needs": len(set(clusters)), "mean_a": sum(xs) / len(xs), "mean_b": sum(ys) / len(ys),
-                         "diff": diff, "ci_low": low, "ci_high": high, "p": p, "wins": wins, "losses": losses, "ties": len(subset) - wins - losses})
+                         "diff": diff, "ci_low": low, "ci_high": high, "p": p, "wins": wins, "losses": losses, "ties": len(subset) - wins - losses, "judged": judged})
     adjusted = holm_adjust(raw)
     for r in rows:
         r["p_holm"] = adjusted[r["name"]]
         excludes_zero = r["ci_low"] > 0 or r["ci_high"] < 0
         confirmed = excludes_zero and r["p_holm"] < cfg.alpha
         r["verdict"] = (f"{r['a']} better" if r["diff"] > 0 else f"{r['b']} better") if confirmed else "no measured difference"
+        if r["judged"] < cfg.min_judged_for_claim:
+            # D-206: অবিচারিত ফল miss হিসেবে গোনা হয়, তাই পুরো বিচার না হলে জয়-পরাজয় বলা যায় না
+            r["verdict"] = f"not ready: only {r['judged']:.0%} of results graded"
     return rows
 
 
@@ -142,7 +155,7 @@ def false_similarity(per_query: dict, queries: list[BenchmarkQuery], cfg: Retrie
         pos, neg, by_lang = [], [], defaultdict(lambda: ([], []))
         worst = []
         for q in queries:
-            if q.id not in per_query or system not in per_query[q.id] or q.group not in ("legal_term", "topic", "dr58"):
+            if q.id not in per_query or system not in per_query[q.id] or q.group not in ("legal_term", "topic", "dr58", "lay"):
                 continue
             for r in per_query[q.id][system]["top_cases"]:
                 if r["grade"] is None or r["score"] < 0:
@@ -152,7 +165,7 @@ def false_similarity(per_query: dict, queries: list[BenchmarkQuery], cfg: Retrie
                 if r["grade"] == 0:
                     worst.append({"query": q.query, "language": q.language, "score": r["score"], "case": r["case"], "snippet": " ".join(snippets.get(r["chunk"], "").split())[:220]})
         no_answer = [per_query[q.id][system]["top_score"] for q in queries if q.group == "no_answer" and q.id in per_query and system in per_query[q.id]]
-        answerable = [per_query[q.id][system]["top_score"] for q in queries if q.group in ("legal_term", "topic", "dr58") and q.id in per_query and system in per_query[q.id]]
+        answerable = [per_query[q.id][system]["top_score"] for q in queries if q.group in ("legal_term", "topic", "dr58", "lay") and q.id in per_query and system in per_query[q.id]]
         na_by_lang = {lang: [per_query[q.id][system]["top_score"] for q in queries if q.group == "no_answer" and q.language == lang and q.id in per_query and system in per_query[q.id]] for lang in ("bn", "en")}
         thresholds = cfg.similarity_thresholds if system == "dense" else ([cfg.rerank_api_threshold, 0.1, 0.3, 0.5, 0.7, 0.9] if system == "hybrid_rerank" else [])
         table = []
@@ -272,7 +285,7 @@ def script_breakdown(per_query: dict, queries: list[BenchmarkQuery], systems: li
     out = {}
     for language in ("bn", "en"):
         out[language] = {}
-        qs = [q for q in queries if q.language == language and q.group in ("topic", "legal_term") and q.id in per_query]
+        qs = [q for q in queries if q.language == language and q.group in ("topic", "legal_term", "lay") and q.id in per_query]
         for bucket in ("en", "mixed", "bn"):
             row = {}
             for s in systems:
@@ -300,10 +313,14 @@ def table(headers: list[str], rows: list[list]) -> str:
 
 
 def tables_md(rep: dict, systems: list[str]) -> str:
-    out = [f"Run: `{rep['collection']}`, queries sha256 `{rep['queries_sha256'][:12]}`, qrels sha256 `{rep['qrels_sha256'][:12]}`.\n"]
-    for key, label in (("overall", "All queries with known relevant cases"), ("bn", "Bangla queries"), ("en", "English queries"), ("known_item_bn", "Known-item, Bangla"), ("known_item_en", "Known-item, English"),
+    labels = rep["qrels"]
+    out = [f"Run: `{rep['collection']}`, queries sha256 `{rep['queries_sha256'][:12]}`, qrels sha256 `{rep['qrels_sha256'][:12]}`.\n",
+           f"Labels: {labels['human_verified']} of {labels['total']} reviewed by a person. Human corrections applied: {'yes' if labels['corrections_applied'] else 'no'}.\n"]
+    for key, label in (("overall", "All queries with known relevant cases"), ("bn", "Bangla queries"), ("en", "English queries"), ("lay_bn", "Lay, Bangla"), ("lay_en", "Lay, English"), ("lay_mixed", "Lay, Banglish and mixed"), ("known_item_bn", "Known-item, Bangla"), ("known_item_en", "Known-item, English"),
                        ("legal_term_bn", "Legal term, Bangla"), ("legal_term_en", "Legal term, English"), ("topic_bn", "Topic, Bangla"), ("topic_en", "Topic, English"), ("dr58_bn", "Death Ref 58, Bangla"), ("dr58_en", "Death Ref 58, English")):
         block = rep["aggregates"][key]
+        if not block["n_queries"]:
+            continue
         out.append(f"\n### {label} ({block['n_queries']} queries, {block['n_needs']} needs)\n")
         out.append(table(["System", "Recall@10", "Capped recall", "Precision@10", "MRR@10", "nDCG@10", "Strict P@10", "Strict MRR", "Judged@10"],
                          [[s, *[fmt(block[s][m]) for m in ("recall", "capped_recall", "precision", "mrr", "ndcg", "strict_precision", "strict_mrr", "judged")]] for s in systems if s in block]))
@@ -340,15 +357,23 @@ def main() -> None:
     ap.add_argument("--runs", default=str(ROOT / "evals" / "runs" / "v3.json"))
     ap.add_argument("--qrels", default=str(GOLDEN / "retrieval_qrels.jsonl"))
     ap.add_argument("--out", default=str(ROOT / "evals" / "reports" / "retrieval_v3"))
+    ap.add_argument("--queries", default=str(GOLDEN / "retrieval_queries.jsonl"))
+    ap.add_argument("--extra-qrels", nargs="*", default=[], help="যেমন evals/golden/lay_qrels.jsonl")
+    ap.add_argument("--with-corrections", action="store_true", help="human_corrections.jsonl লাগায়; না দিলে Claude এর grade ই চলে (D-207)")
     args = ap.parse_args()
 
     run = json.loads(Path(args.runs).read_text(encoding="utf-8"))
-    query_path = GOLDEN / "retrieval_queries.jsonl"
+    query_path = Path(args.queries)
     if hashlib.sha256(query_path.read_bytes()).hexdigest() != run["queries_sha256"]:
         raise SystemExit("queries changed since this run")
     cfg = RetrievalEvalConfig.model_validate(run["config"])
     queries = load_queries(query_path)
     qrels = load_qrels(Path(args.qrels))
+    for extra in args.extra_qrels:
+        qrels += load_qrels(Path(extra))
+    correction_stats = None
+    if args.with_corrections:
+        qrels, correction_stats = apply_human_decisions(qrels, load_decisions(GOLDEN / "human_corrections.jsonl"))
     grades = grades_by_need(qrels)
     targets = json.loads((GOLDEN / "known_targets.json").read_text(encoding="utf-8"))
     corpus = load_corpus()
@@ -363,8 +388,8 @@ def main() -> None:
         "en": aggregate(per_query, queries, systems, lambda q: answerable(q) and q.language == "en"),
         "unseen_only": aggregate(per_query, queries, systems, lambda q: answerable(q) and not q.seen_before),
     }
-    for group in ("known_item", "legal_term", "topic", "dr58"):
-        for language in ("bn", "en"):
+    for group in ("known_item", "legal_term", "topic", "dr58", "lay"):
+        for language in ("bn", "en", "mixed"):
             aggregates[f"{group}_{language}"] = aggregate(per_query, queries, systems, lambda q, g=group, la=language: q.group == g and q.language == la)
 
     has_all = all(s in systems for s in HEADLINE)
@@ -376,7 +401,8 @@ def main() -> None:
         "collection": run["collection"], "query_form": run["query_form"], "queries_sha256": run["queries_sha256"],
         "qrels_sha256": hashlib.sha256(Path(args.qrels).read_bytes()).hexdigest(),
         "config": run["config"], "systems": systems,
-        "qrels": {"total": len(qrels), "grades": dict(Counter(str(r.grade) for r in qrels)), "human_verified": sum(r.human_verified for r in qrels), "judged_by": sorted({r.judged_by for r in qrels})},
+        "qrels": {"total": len(qrels), "grades": dict(Counter(str(r.grade) for r in qrels)), "human_verified": sum(r.human_verified for r in qrels), "judged_by": sorted({r.judged_by for r in qrels}),
+                  "corrections_applied": bool(args.with_corrections), "correction_stats": correction_stats},
         "aggregates": aggregates,
         "declared": declared_tests(per_query, queries, cfg) if has_all else [],
         "domination": domination_table(per_query, queries, systems, run, cfg),

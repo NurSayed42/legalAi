@@ -25,13 +25,13 @@ if hasattr(sys.stdout, "reconfigure"):
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
-from evals.retrieval_schema import BenchmarkQuery, load_queries  # noqa: E402
+from evals.retrieval_schema import BenchmarkQuery, grades_by_need, load_qrels, load_queries  # noqa: E402
 from evals.tools.corpus import BN, doc_script, load_corpus, normalize, term_pattern  # noqa: E402
 from retrieval.hybrid import RankedChunk, collapse_to_cases  # noqa: E402
 
 JUDGING = ROOT / "evals" / "judging"
 QUERIES = ROOT / "evals" / "golden" / "retrieval_queries.jsonl"
-JUDGED_GROUPS = ("legal_term", "topic", "dr58")
+JUDGED_GROUPS = ("legal_term", "topic", "dr58", "lay")
 SEED = 20261105
 
 
@@ -125,10 +125,26 @@ def main() -> None:
     ap.add_argument("--arm", type=int, default=5)
     ap.add_argument("--width", type=int, default=100, help="key term এর দুই পাশে কত অক্ষর")
     ap.add_argument("--needs", nargs="*", default=None)
+    ap.add_argument("--queries", default=str(QUERIES))
+    ap.add_argument("--qrels", nargs="*", default=[], help="আগে বিচার করা label: সেই মামলার card আবার তৈরি হয় না")
+    ap.add_argument("--count-only", action="store_true", help="কয়টা card লাগবে শুধু সেটা বলে, লেখা দেখায় না")
+    ap.add_argument("--out-dir", default=str(JUDGING))
     args = ap.parse_args()
 
     run = json.loads(Path(args.runs).read_text(encoding="utf-8"))
-    queries = load_queries(QUERIES)
+    queries = load_queries(Path(args.queries))
+    known = grades_by_need([r for path in args.qrels for r in load_qrels(Path(path))])
+    if args.count_only:
+        counts = {}
+        k = run["config"]["k"]
+        by_need_ids: dict[str, list[str]] = {}
+        for q in queries:
+            by_need_ids.setdefault(q.need_id, []).append(q.id)
+        for need, ids in sorted(by_need_ids.items()):
+            pool = run_pool(run, ids, run["systems"], k)
+            counts[need] = {"pool": len(pool), "already_graded": len(pool & set(known.get(need, {}))), "to_grade": len(pool - set(known.get(need, {})))}
+        print(json.dumps({"needs": counts, "total_to_grade": sum(c["to_grade"] for c in counts.values()), "total_pool": sum(c["pool"] for c in counts.values())}, indent=0))
+        return
     corpus = load_corpus()
     corpus_norm = {k: normalize(v) for k, v in corpus.items()}
     JUDGING.mkdir(exist_ok=True)
@@ -141,7 +157,8 @@ def main() -> None:
     for need, qs in sorted(by_need.items()):
         pool = run_pool(run, [q.id for q in qs], run["systems"], k)
         arm = arm_cases(corpus_norm, qs[0].key_terms, args.arm)
-        count = write_need(need, qs, sorted(pool | set(arm)), corpus, run, args.width)
+        fresh = sorted((pool | set(arm)) - set(known.get(need, {})))
+        count = write_need(need, qs, fresh, corpus, run, args.width)
         total += count
         print(f"{need}: pool {len(pool)} + arm-only {len(set(arm) - pool)} = {count}")
     print("total cards", total)

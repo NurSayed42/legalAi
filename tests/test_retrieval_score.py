@@ -81,7 +81,7 @@ def test_identical_systems_are_never_called_better(cfg):
 def test_clear_gain_on_many_needs_is_confirmed_with_direction(cfg):
     n = 20
     queries = [query(f"{la}{i}", f"t{i}", la) for i in range(n) for la in ("en", "bn")]
-    per = score_run(_paired(n, ["good"], ["bad"]), queries, {f"t{i}": {"good": 2} for i in range(n)}, cfg)
+    per = score_run(_paired(n, ["good"], ["bad"]), queries, {f"t{i}": {"good": 2, "bad": 0} for i in range(n)}, cfg)
     rows = {r["name"]: r for r in declared_tests(per, queries, cfg)}
     assert rows["bm25 vs dense [bn]"]["verdict"] == "bm25 better"
     assert rows["hybrid vs dense [en]"]["diff"] == pytest.approx(1.0)
@@ -93,8 +93,23 @@ def test_gain_on_three_needs_cannot_be_confirmed(cfg):
     """নিখুঁত জয়ও ৩ টা need এ প্রমাণ নয়: সব চিহ্ন একদিকে হওয়া কাকতালীয় হতে পারে।"""
     n = 3
     queries = [query(f"{la}{i}", f"t{i}", la) for i in range(n) for la in ("en", "bn")]
-    per = score_run(_paired(n, ["good"], ["bad"]), queries, {f"t{i}": {"good": 2} for i in range(n)}, cfg)
+    per = score_run(_paired(n, ["good"], ["bad"]), queries, {f"t{i}": {"good": 2, "bad": 0} for i in range(n)}, cfg)
     assert {r["verdict"] for r in declared_tests(per, queries, cfg)} == {"no measured difference"}
+
+
+def test_a_win_on_ungraded_results_is_not_ready_rather_than_a_win(cfg):
+    """D-206: অবিচারিত ফল miss হিসেবে গোনা হয়, তাই পুরো বিচার ছাড়া জয়-পরাজয় নেই।"""
+    n = 20
+    queries = [query(f"{la}{i}", f"t{i}", la) for i in range(n) for la in ("en", "bn")]
+    per = score_run(_paired(n, ["good"], ["ungraded"]), queries, {f"t{i}": {"good": 2} for i in range(n)}, cfg)
+    assert declared_tests(per, queries, cfg)[0]["verdict"].startswith("not ready")
+
+
+def test_known_items_dont_need_their_other_results_graded(cfg):
+    n = 20
+    queries = [query(f"{la}{i}", f"t{i}", la, group="known_item") for i in range(n) for la in ("en", "bn")]
+    per = score_run(_paired(n, ["good"], ["ungraded"]), queries, {f"t{i}": {"good": 2} for i in range(n)}, cfg)
+    assert declared_tests(per, queries, cfg)[0]["verdict"] == "bm25 better"
 
 
 def test_domination_counts_large_cases_and_skips_known_items(cfg):
