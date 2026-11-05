@@ -134,7 +134,6 @@ function Stepper({
               type="button"
               disabled={!canGo(i)}
               aria-current={current ? "step" : undefined}
-              aria-label={`ধাপ ${bnDigits(i + 1)}: ${label}`}
               onClick={() => onGo(i)}
               className="press hit-target relative flex min-w-0 items-center gap-2 rounded text-14 disabled:cursor-default"
             >
@@ -152,10 +151,11 @@ function Stepper({
               <span
                 className={cn(
                   "truncate",
-                  current ? "font-medium text-fg-1" : "hidden text-fg-2 xs:inline",
+                  current ? "font-medium text-fg-1" : "sr-only text-fg-2 xs:not-sr-only",
                   !current && !done && "text-fg-3",
                 )}
               >
+                <span className="sr-only">ধাপ {bnDigits(i + 1)}: </span>
                 {label}
               </span>
             </button>
