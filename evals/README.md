@@ -167,7 +167,7 @@ Prompts are versioned in `llm/prompts/judge_faithfulness_v1.md` and `judge_corre
 
 ## See it live
 
-`python evals/serve_live.py` serves the existing `legal_ui_v2.html` and the real pipeline from one process at `http://localhost:8001`, on the evaluation copy, listening only on this computer (D-210). It refuses port 8000. Questions in the UI make real LLM calls, about 2–3 per question. Search doesn't.
+`python evals/serve_live.py` serves the UI (`frontend/dist` if it's built, otherwise `legal_ui_v2.html`; `--ui legacy` forces the old one) and the real pipeline from one process at `http://localhost:8001`, on the evaluation copy, listening only on this computer (D-210). It refuses port 8000. Questions in the UI make real LLM calls, about 2–3 per question. Search doesn't.
 
 ## Phase 3 preparation
 
