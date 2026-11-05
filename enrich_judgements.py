@@ -7,17 +7,45 @@ judgements.json থেকে rich metadata extract করো,
 Metadata per judgement:
   filename, case_no, year, division, case_type,
   outcome, judges (partial), subject_keywords, word_count
+
+    python enrich_judgements.py                                   # cleaned text/labels থাকলে সেগুলো
+    python enrich_judgements.py --text raw --labels regex --allow-replace   # আসল v1 baseline index
+    python enrich_judgements.py --text v2 --labels clean --collection bangladesh_judgements_v2
+    python enrich_judgements.py --text v3 --labels clean --collection bangladesh_judgements_v3
+
+--text v3 এ বিশাল মামলার chunk সীমা লাগে (ingestion/chunk_cap.py, docs/DECISIONS.md D-120); v1/v2 আগের মতোই।
+
+Collection টা "<name>__building" এ তৈরি হয়, শেষ হলে তবেই পুরনোটার জায়গা নেয় — মাঝপথে বন্ধ
+হলে চালু index নষ্ট হয় না, আবার চালালে যেখানে থেমেছিল সেখান থেকে চলে। আগে থেকে থাকা collection
+--allow-replace ছাড়া বদলায় না (default নাম v1 এর, ভুল command এ baseline মুছে যেতে পারত)।
 """
 
+import argparse
+import csv
 import json
+import os
 import re
-from tqdm import tqdm
+
 import chromadb
 from chromadb.utils import embedding_functions
+from dotenv import load_dotenv
+from tqdm import tqdm
+
+from ingestion.chunk_cap import CAP_CONFIG, plan_index
+
+load_dotenv()
 
 # ─── CONFIG ───────────────────────────────────────────────
 JUDGEMENTS_FILE = "./judgements.json"
-CHROMA_DB_PATH  = "./legal_chroma_db"
+# clean_metadata.py চালানো থাকলে এগুলো ব্যবহার হয় — OCR-fixed text আর header থেকে আসা
+# case_no/case_type, LLM subject label, text_quality
+CLEAN_FILE      = "./judgements_clean.json"
+LABELS_FILE     = "./judgement_labels.json"
+# ingestion/pdf_extract.py এর re-extracted text (Phase 1) আর তার audit
+TEXT_DIRS       = {"v2": "./text_v2", "v3": "./text_v3"}
+AUDIT_FILES     = {"v2": "./data_quality/audit_v2.csv", "v3": "./data_quality/audit_v3_strict.csv"}
+CAP_REPORT      = "./data_quality/v3_index_plan.json"
+CHROMA_DB_PATH  = os.getenv("CHROMA_DB_PATH", "./legal_chroma_db")   # api_v3.py এর সাথে একই path
 COLLECTION_NAME = "bangladesh_judgements"
 EMBED_MODEL     = "paraphrase-multilingual-MiniLM-L12-v2"
 CHUNK_SIZE      = 600   # words per chunk (reduced for better precision)
@@ -175,27 +203,65 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE,
 
 # ─── MAIN ─────────────────────────────────────────────────
 
-def build_judgements_collection():
-    print("📂 judgements.json load করছি...")
-    with open(JUDGEMENTS_FILE, encoding="utf-8") as f:
-        judgements = json.load(f)
-    print(f"✅ {len(judgements)} টা judgement পেলাম\n")
+def write_cap_report(plan: dict, path: str = CAP_REPORT) -> None:
+    report = {k: v for k, v in plan.items() if k != "keep"}
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(report, f, ensure_ascii=False, indent=1)
+        f.write("\n")
+
+
+def build_judgements_collection(text_source: str = "auto", label_source: str = "auto",
+                                collection_name: str = COLLECTION_NAME, allow_replace: bool = False,
+                                max_chunks_per_case: int | None = None):
+    client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+    existing = [c if isinstance(c, str) else c.name for c in client.list_collections()]
+    if collection_name in existing and not allow_replace:
+        raise SystemExit(f"{collection_name} আগে থেকেই আছে — বদলাতে চাইলে --allow-replace দিন")
+
+    if text_source == "auto":
+        text_source = "clean" if os.path.exists(CLEAN_FILE) else "raw"
+    if label_source == "auto":
+        label_source = "clean" if os.path.exists(LABELS_FILE) else "regex"
+    if text_source in TEXT_DIRS:
+        text_dir = TEXT_DIRS[text_source]
+        print(f"📂 {text_dir}/*.txt load করছি...")
+        judgements = [
+            {"filename": name[:-4] + ".pdf", "text": open(os.path.join(text_dir, name), encoding="utf-8").read()}
+            for name in sorted(os.listdir(text_dir)) if name.endswith(".txt")
+        ]
+    else:
+        source = CLEAN_FILE if text_source == "clean" else JUDGEMENTS_FILE
+        print(f"📂 {source} load করছি...")
+        with open(source, encoding="utf-8") as f:
+            judgements = json.load(f)
+    labels = {}
+    if label_source == "clean":
+        with open(LABELS_FILE, encoding="utf-8") as f:
+            labels = json.load(f)
+        print(f"🏷️  {LABELS_FILE} থেকে {len(labels)} টা judgement এর cleaned label")
+    # v2/v3 text এর quality নিজের audit থেকে — v1 label এর 'legacy_bangla_font' OCR এর পরে আর সত্য না
+    v2_quality = {}
+    if text_source in AUDIT_FILES and os.path.exists(AUDIT_FILES[text_source]):
+        with open(AUDIT_FILES[text_source], encoding="utf-8") as f:
+            v2_quality = {row["filename"]: row["bucket"] for row in csv.DictReader(f)}
+    cap_active = text_source == "v3"
+    plan = None
+    if cap_active:
+        cap = CAP_CONFIG["max_chunks_per_case"] if max_chunks_per_case is None else max_chunks_per_case
+        plan = plan_index({case["filename"]: len(chunk_text(case["text"])) for case in judgements}, cap)
+        write_cap_report(plan)
+        print(f"✂️  সীমা {cap} chunk/মামলা: text এ {plan['chunks_from_text']} chunk, index এ {plan['chunks_indexed']}; {plan['capped_cases']}")
+    capped_files = {name for case in (plan["capped_cases"].values() if plan else []) for name in case["files"]}
+    print(f"✅ {len(judgements)} টা judgement পেলাম → {collection_name} (text={text_source}, labels={label_source})\n")
 
     print("🤖 Embedding model load করছি...")
     embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
         model_name=EMBED_MODEL
     )
 
-    client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-
-    try:
-        client.delete_collection(COLLECTION_NAME)
-        print("🗑️  পুরনো judgements collection delete করলাম")
-    except Exception:
-        pass
-
-    collection = client.create_collection(
-        name=COLLECTION_NAME,
+    building_name = f"{collection_name}__building"
+    collection = client.get_or_create_collection(
+        name=building_name,
         embedding_function=embedding_fn,
         metadata={"hnsw:space": "cosine"},
     )
@@ -208,13 +274,14 @@ def build_judgements_collection():
         text     = case["text"]
 
         # ── Extract metadata ──
+        label    = labels.get(filename, {})
         year     = extract_year(filename, text)
-        case_type = extract_case_type(filename)
+        case_type = label.get("case_type") or extract_case_type(filename)
         outcome  = extract_outcome(filename, text)
         division = extract_division(text)
         judges   = extract_judges(text)
-        subjects = extract_subject_keywords(text)
-        case_no  = extract_case_no(filename)
+        subjects = ",".join(label["subjects"]) if label.get("subjects") else extract_subject_keywords(text)
+        case_no  = label.get("case_no") or extract_case_no(filename)
 
         base_meta = {
             "filename":    filename,
@@ -225,29 +292,53 @@ def build_judgements_collection():
             "outcome":     outcome,
             "judges":      judges,
             "subjects":    subjects,
+            "text_quality": v2_quality.get(filename) or label.get("text_quality", "ok"),
             "source_type": "judgement",
         }
 
         # ── Chunk ──
+        kept = set(plan["keep"][filename]) if plan else None
         for chunk_idx, chunk_text_str in chunk_text(text):
+            if kept is not None and chunk_idx not in kept:
+                continue
             doc_id = f"{filename}__chunk_{chunk_idx}"
             meta = {**base_meta, "chunk_index": chunk_idx}
+            if cap_active:
+                meta["case_capped"] = filename in capped_files
 
             all_docs.append(chunk_text_str)
             all_ids.append(doc_id)
             all_metas.append(meta)
 
+    del judgements, labels, v2_quality   # 7.7 GB RAM এ embedding এর আগে পুরো corpus এর দ্বিতীয় copy ছেড়ে দাও
     print(f"\n📊 মোট {len(all_docs)} টা chunk তৈরি হলো")
 
+    # আগের অসম্পূর্ণ run এর chunk গুলো আবার embed না করে সেখান থেকে চালাও (একই ক্রমে add হয়)
+    resume_from = collection.count() // BATCH_SIZE * BATCH_SIZE
+    if resume_from:
+        # text বদলে গেলে ক্রমও বদলায়, তখন count দিয়ে resume করলে chunk বাদ পড়ত
+        probe = all_ids[resume_from - 1] if resume_from <= len(all_ids) else None
+        if probe is None or not collection.get(ids=[probe], include=[])["ids"]:
+            raise SystemExit(f"{building_name} এর chunk এই text এর সাথে মেলে না — আগের build অন্য text থেকে; "
+                             f"collection টা দেখে নিয়ে সিদ্ধান্ত নিন")
+        print(f"↩️  {building_name} এ আগের run এর {resume_from} টা chunk আছে — সেখান থেকে চলছে")
+
     print("\n💾 ChromaDB তে store করছি...")
-    for i in tqdm(range(0, len(all_docs), BATCH_SIZE), desc="Storing"):
-        collection.add(
+    for i in tqdm(range(resume_from, len(all_docs), BATCH_SIZE), desc="Storing"):
+        collection.upsert(
             documents=all_docs[i:i + BATCH_SIZE],
             ids=all_ids[i:i + BATCH_SIZE],
             metadatas=all_metas[i:i + BATCH_SIZE],
         )
 
-    print(f"\n✅ Judgements collection ready! {collection.count()} টা chunk stored।")
+    # সম্পূর্ণ হলে তবেই পুরনো collection এর জায়গা নেয়
+    try:
+        client.delete_collection(collection_name)
+        print(f"🗑️  পুরনো {collection_name} delete করলাম")
+    except Exception:
+        pass
+    collection.modify(name=collection_name)
+    print(f"\n✅ {collection_name} ready! {collection.count()} টা chunk stored।")
 
     # Quick stats
     print("\n📈 Outcome distribution:")
@@ -277,7 +368,22 @@ def test_search(collection, query: str, filters: dict = None):
 
 
 if __name__ == "__main__":
-    col = build_judgements_collection()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--text", choices=["auto", "raw", "clean", "v2", "v3"], default="auto",
+                    help="raw = judgements.json, clean = clean_metadata.py এর judgements_clean.json, "
+                         "v2 = ingestion/pdf_extract.py এর text_v2/, v3 = ingestion/build_text_v3.py এর text_v3/")
+    ap.add_argument("--max-chunks-per-case", type=int, default=None,
+                    help="শুধু --text v3: ingestion/chunk_cap.py এর CAP_CONFIG এর সীমা বদলাতে")
+    ap.add_argument("--labels", choices=["auto", "regex", "clean"], default="auto",
+                    help="regex = এই file এর extractor, clean = judgement_labels.json")
+    ap.add_argument("--collection", default=COLLECTION_NAME)
+    ap.add_argument("--allow-replace", action="store_true", help="আগে থেকে থাকা collection প্রতিস্থাপন করতে দাও")
+    ap.add_argument("--skip-tests", action="store_true")
+    args = ap.parse_args()
+
+    col = build_judgements_collection(args.text, args.labels, args.collection, args.allow_replace, args.max_chunks_per_case)
+    if args.skip_tests:
+        raise SystemExit(0)
 
     print("\n" + "=" * 60)
     print("🧪 Search tests:")

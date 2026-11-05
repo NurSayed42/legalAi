@@ -1,8 +1,9 @@
+import json
+import re
+import time
+
 import requests
 from bs4 import BeautifulSoup
-import re
-import json
-import time
 
 BASE_URL = "http://bdlaws.minlaw.gov.bd/act-details-{}.html"
 

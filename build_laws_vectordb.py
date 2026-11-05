@@ -6,19 +6,24 @@ Section-level granularity — প্রতিটা section আলাদা docu
 """
 
 import json
+import os
 import re
 import sys
-from tqdm import tqdm
+
 import chromadb
 from chromadb.utils import embedding_functions
+from dotenv import load_dotenv
+from tqdm import tqdm
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
+load_dotenv()
+
 # ─── CONFIG ───────────────────────────────────────────────
 LAWS_FILE        = "./bangladesh_laws.json"
-CHROMA_DB_PATH   = "./legal_chroma_db"
+CHROMA_DB_PATH   = os.getenv("CHROMA_DB_PATH", "./legal_chroma_db")   # api_v3.py এর সাথে একই path
 COLLECTION_NAME  = "bangladesh_laws"
 EMBED_MODEL      = "paraphrase-multilingual-MiniLM-L12-v2"
 BATCH_SIZE       = 100
@@ -26,13 +31,17 @@ MIN_TEXT_LEN     = 50   # এর চেয়ে ছোট section skip কর�
 # ──────────────────────────────────────────────────────────
 
 
+BN_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+
+
 def extract_year(pub_date: str) -> int | None:
-    """'11th September, 1836' → 1836"""
-    m = re.search(r"\b(1[5-9]\d{2}|20\d{2})\b", pub_date)
+    """'11th September, 1836' → 1836, '১৪ ফেব্রুয়ারী, ২০০০' → 2000"""
+    m = re.search(r"\b(1[5-9]\d{2}|20\d{2})\b", pub_date.translate(BN_DIGITS))
     return int(m.group(1)) if m else None
 
 
-SECTION_NO_RE = re.compile(r"^\s*(\d+[A-Za-z]?)\.")
+# বাংলা আইনে '১৷' / '১।' — শুধু '.' ধরলে বাংলা আইনের কোনো section_no পাওয়া যেত না
+SECTION_NO_RE = re.compile(r"^\s*([0-9০-৯]+[A-Za-z]?)\s*[.।৷]")
 
 
 def extract_section_no(sec_text: str) -> str:
@@ -41,7 +50,7 @@ def extract_section_no(sec_text: str) -> str:
     ('302. Whoever commits murder...')। Exact-section-lookup এর জন্য এইটা
     আলাদা metadata হিসেবে বের করে রাখা দরকার।"""
     m = SECTION_NO_RE.match(sec_text)
-    return m.group(1) if m else ""
+    return m.group(1).translate(BN_DIGITS) if m else ""
 
 
 def classify_act(title: str) -> str:

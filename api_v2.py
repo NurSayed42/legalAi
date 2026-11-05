@@ -15,18 +15,19 @@ Features:
   ✅ API key from .env
 """
 
+import json
+import json as _json
 import os
 import re
-import json
-from typing import Optional
 from collections import Counter
-from dotenv import load_dotenv
+from typing import Optional
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import json as _json
+
 
 class UTF8JSONResponse(JSONResponse):
     """ensure_ascii=False — Bangla characters সঠিকভাবে render হবে।"""

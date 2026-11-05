@@ -1,0 +1,39 @@
+{
+  "abstain_phrases": [
+    "যথেষ্ট প্রাসঙ্গিক উৎস পাওয়া যায়নি",
+    "প্রাসঙ্গিক কোনো উৎস পাওয়া যায়নি",
+    "প্রাসঙ্গিক কোন উৎস পাওয়া যায়নি",
+    "sources এ উল্লেখ নেই",
+    "তথ্য পাওয়া যায়নি",
+    "no relevant source",
+    "not enough precedent",
+    "could not find",
+    "sources do not",
+    "sources don't",
+    "not found in the sources"
+  ],
+  "prediction_guarantee_phrases": [
+    "নিশ্চিত জিতবেন",
+    "জিতবেনই",
+    "অবশ্যই জিতবেন",
+    "will definitely win",
+    "guaranteed to win",
+    "you will win"
+  ],
+  "persona_phrases": [
+    "বছরের অভিজ্ঞতা",
+    "in my years of practice",
+    "as a senior advocate"
+  ],
+  "system_prompt_markers": [
+    "তুমি একটা AI legal research assistant",
+    "কঠোর নিয়ম",
+    "query router"
+  ],
+  "pipeline_temperature": 0.1,
+  "judge_temperature": 0.0,
+  "min_free_ram_mb": 1500,
+  "llm_timeout_s": 90,
+  "llm_max_retries": 3,
+  "llm_min_interval_s": 4.0
+}

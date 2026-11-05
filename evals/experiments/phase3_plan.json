@@ -1,0 +1,79 @@
+{
+  "baseline": "BM25 on bangladesh_judgements_v3 at the 400-chunk cap, raw query, API tokenizer. It is the comparison point, not a production decision.",
+  "decision_rule": "A variant counts as better than the baseline only if, on nDCG@10 for that language, the 95% paired bootstrap interval excludes zero, the Holm-adjusted p-value across the experiment's tests is below 0.05, and at least 90% of its top-10 results are graded. Keep a change only if it also doesn't lower known-item MRR by more than the interval's width and fits the latency budget.",
+  "latency_budget_s": 15,
+  "experiments": [
+    {
+      "id": "E1",
+      "name": "Bangla-to-English query translation",
+      "hypothesis": "Most relevant judgements are in English, so an English form of a Bangla query reaches them and raises Bangla nDCG@10.",
+      "evidence": "With BM25, topic nDCG is 0.429 in Bangla and 0.883 in English on the same needs. A hand-written English form fused with the Bangla query reaches 0.694.",
+      "variants": ["hand_en", "bn_plus_hand_en", "llm_en", "bn_plus_llm_en"],
+      "queries": "Bangla and mixed queries in the benchmark and the lay set",
+      "cost": "No new index. About 60 LLM calls, cached by prompt hash, about 5 minutes at 15 requests a minute. Cost per call unknown until llm/pricing.json is filled in.",
+      "expensive": false,
+      "needs_llm": true,
+      "runner": "built"
+    },
+    {
+      "id": "E2",
+      "name": "Alternative embedding models",
+      "hypothesis": "A stronger multilingual model separates Bangla text better and bridges Bangla queries to English judgements.",
+      "evidence": "MiniLM scores 0.061 in Bangla, found 1 of 371 English judgements from Bangla queries, and reads only the first 128 tokens of each 600-word chunk.",
+      "variants": ["minilm_recheck", "bge-m3", "e5-large"],
+      "queries": "All benchmark and lay queries",
+      "cost": "Needs a model download of several GB, and hours of CPU for 34,217 chunks. MiniLM indexed about 11 chunks a second; larger models will be much slower. Measure with --limit 200 before committing. Vectors go to evals/cache/embeddings, never into ChromaDB.",
+      "expensive": true,
+      "needs_llm": false,
+      "runner": "index builder built; scoring not built yet"
+    },
+    {
+      "id": "E2b",
+      "name": "Chunks that fit the embedding model",
+      "hypothesis": "Dense search is weak partly because MiniLM truncates at 128 tokens, so embedding several short windows per chunk raises recall.",
+      "evidence": "max_seq_length is 128 and chunks are 600 words. In a sample of 1,500 chunks, 97.1% are cut off and the model reads a median of 80 words, or 57 in Bangla-script chunks (evals/reports/embedding_truncation.json).",
+      "variants": ["minilm_short_windows"],
+      "queries": "All benchmark and lay queries",
+      "cost": "Several times the vectors of a normal build at about 11 windows a second, in evals/cache/embeddings. No ChromaDB change.",
+      "expensive": true,
+      "needs_llm": false,
+      "runner": "not built; decide after E2's timing probe"
+    },
+    {
+      "id": "E3",
+      "name": "Reranking BM25 results alone",
+      "hypothesis": "Dense noise hurts hybrid, so reranking BM25's candidates keeps the reranker's gain on exact lookups without hybrid's losses.",
+      "evidence": "Hybrid + rerank ties BM25, winning on known-item lookups and losing on topics and legal terms. It costs 36 seconds a query at 50 pairs.",
+      "variants": ["bm25_rerank_10", "bm25_rerank_20", "bm25_rerank_50"],
+      "queries": "All benchmark and lay queries",
+      "cost": "About 0.7 seconds a pair on CPU, so 7, 14 and 36 seconds a query when nothing is cached. For the 95 benchmark queries, depths 10 and 20 need 0 and 5 new pairs because the earlier run scored them, and depth 50 needs 2,257, about 26 minutes. Lay queries add new pairs. `--plan E3` shows the current figures.",
+      "expensive": true,
+      "needs_llm": false,
+      "runner": "built"
+    },
+    {
+      "id": "E4",
+      "name": "Unicode, digit and light-stem normalization",
+      "hypothesis": "Normalizing query and document tokens fixes cross-script case numbers and inflected Bangla words without hurting English.",
+      "evidence": "All 6 cross-script case-number lookups failed. BM25's top 10 changed on 16 of 17 Bangla queries when typed with single-character letters. `দেনমোহর` doesn't match `দেনমোহরের`.",
+      "variants": ["nfc", "nfc_digits", "nfc_digits_stem"],
+      "queries": "All benchmark and lay queries",
+      "cost": "An in-memory BM25 rebuild for each level, under a minute each. No ChromaDB change.",
+      "expensive": false,
+      "needs_llm": false,
+      "runner": "built"
+    },
+    {
+      "id": "E5",
+      "name": "Large-document retrieval without changing the cap",
+      "hypothesis": "Searching a case's full text once it's found recovers the passages the cap hides, and a per-case chunk limit stops one case filling the context.",
+      "evidence": "BM25 finds Death Ref 58 first on all 8 content queries, but only 7% of a sample of rare words from it are in the index, and one case can fill all 10 chunk slots.",
+      "variants": ["limit_1", "limit_2", "limit_3", "case_text_search"],
+      "queries": "Death Ref 58 queries for passage search; all non-known-item queries for the chunk limit",
+      "cost": "Under a few minutes. Reads text_v3 only. The cap stays at 400.",
+      "expensive": false,
+      "needs_llm": false,
+      "runner": "built"
+    }
+  ]
+}

@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relevance Label Review</title>
+<style>
+:root {
+  --bg: #f6f5f1; --card: #ffffff; --ink: #1d2428; --muted: #5b676e; --line: #d9d6cd; --accent: #1f5f8b; --accent-ink: #ffffff;
+  --mark: #fde9a8; --mark-ink: #1d2428; --ok: #1f7a4d; --warn: #a15c00; --bad: #a83232; --soft: #eef1f2;
+  --bn: "Nirmala UI", "Noto Sans Bengali", "Vrinda", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #15191c; --card: #1e2428; --ink: #e6e9ea; --muted: #a2adb3; --line: #333c42; --accent: #6db3e0; --accent-ink: #10171b;
+    --mark: #6b5610; --mark-ink: #fff4cf; --ok: #62c795; --warn: #e0a64f; --bad: #e88080; --soft: #262d32; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 var(--bn); }
+header { position: sticky; top: 0; z-index: 2; background: var(--card); border-bottom: 1px solid var(--line); padding: 10px 16px; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 980px; margin: 0 auto; }
+h1 { font-size: 16px; margin: 0 8px 0 0; }
+.progress { color: var(--muted); font-variant-numeric: tabular-nums; }
+main { max-width: 980px; margin: 0 auto; padding: 16px; }
+section.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 14px; }
+h2 { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+.query { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+.passage { background: var(--soft); border-radius: 6px; padding: 10px 12px; overflow-wrap: anywhere; }
+mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; }
+.meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-weight: 600; background: var(--soft); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button, select, input[type=text], input[type=file] { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; min-height: 36px; }
+button { cursor: pointer; }
+button.primary, button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+textarea { width: 100%; min-height: 60px; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+a { color: var(--accent); }
+kbd { font: 12px ui-monospace, Consolas, monospace; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.status-agree { color: var(--ok); } .status-change { color: var(--bad); } .status-unsure { color: var(--warn); }
+.notice { font-size: 13px; color: var(--muted); }
+label.check { display: inline-flex; gap: 6px; align-items: center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Label review</h1>
+    <span class="progress" id="progress"></span>
+    <label>Reviewer <input type="text" id="reviewer" placeholder="Your name" autocomplete="name"></label>
+    <select id="need" aria-label="Filter by question"></select>
+    <label class="check"><input type="checkbox" id="undecided"> Undecided only</label>
+    <button class="primary" id="export">Export decisions</button>
+    <label class="notice">Restore an export <input type="file" id="restore" accept=".csv"></label>
+  </div>
+</header>
+<main>
+  <p class="notice" id="saved"></p>
+  <div id="view"></div>
+  <section class="card">
+    <h2>Grades</h2>
+    <p class="meta" id="legend"></p>
+    <p class="notice">Keys: <kbd>A</kbd> agree, <kbd>0</kbd> <kbd>1</kbd> <kbd>2</kbd> change the grade, <kbd>U</kbd> unsure, <kbd>←</kbd> <kbd>→</kbd> previous and next. A grade is about the whole judgement, so open the PDF when the passages don't settle it.</p>
+  </section>
+</main>
+<script>
+const DATA = /*__DATA__*/null;
+const KEY = "legal-label-review-v1";
+const $ = id => document.getElementById(id);
+let store = { reviewer: "", decisions: {} };
+let storageOk = true;
+try {
+  const raw = localStorage.getItem(KEY);
+  if (raw) store = Object.assign(store, JSON.parse(raw));
+} catch (e) { storageOk = false; }
+let index = 0;
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) { storageOk = false; }
+  showSaved();
+}
+function showSaved() {
+  $("saved").textContent = storageOk
+    ? "Decisions are saved in this browser only. Export them regularly; the export is what counts."
+    : "This browser isn't saving decisions, so export before closing this page.";
+}
+function visible() {
+  const need = $("need").value;
+  const undecided = $("undecided").checked;
+  return DATA.rows.filter(r => (!need || r.need_id === need) && (!undecided || !store.decisions[r.review_id]));
+}
+function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+// Judgement text is untrusted, so it only ever enters the page as text nodes.
+function highlighted(text, terms) {
+  const box = document.createElement("div");
+  box.className = "passage";
+  const usable = (terms || []).filter(Boolean).map(escapeRe);
+  if (!usable.length) { box.textContent = text; return box; }
+  const re = new RegExp("(" + usable.join("|") + ")", "gi");
+  text.split(re).forEach((part, i) => {
+    if (i % 2) { const m = document.createElement("mark"); m.textContent = part; box.appendChild(m); }
+    else if (part) box.appendChild(document.createTextNode(part));
+  });
+  return box;
+}
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function decide(row, decision, grade) {
+  const old = store.decisions[row.review_id] || {};
+  store.decisions[row.review_id] = { decision, human_grade: grade, reviewer_notes: old.reviewer_notes || "", reviewed_on: new Date().toISOString().slice(0, 10) };
+  save();
+  render();
+}
+function render() {
+  const list = visible();
+  const done = Object.keys(store.decisions).length;
+  $("progress").textContent = done + " of " + DATA.rows.length + " reviewed";
+  const view = $("view");
+  view.replaceChildren();
+  if (!list.length) { view.appendChild(el("p", "notice", "Nothing left in this view.")); return; }
+  index = Math.max(0, Math.min(index, list.length - 1));
+  const row = list[index];
+  const d = store.decisions[row.review_id];
+  const terms = DATA.terms[row.need_id];
+
+  const q = el("section", "card");
+  q.appendChild(el("h2", "", "Question, " + row.need_id + " (" + (index + 1) + " of " + list.length + ")"));
+  row.queries.split(" || ").forEach(t => q.appendChild(el("p", "query", t)));
+  view.appendChild(q);
+
+  const j = el("section", "card");
+  j.appendChild(el("h2", "", "Judgement"));
+  j.appendChild(el("p", "meta", row.case_header));
+  const line = el("p", "row");
+  const a = el("a", "", row.pdf_file);
+  a.href = "../../downloaded_pdfs/" + encodeURIComponent(row.pdf_file) + (row.pdf_page ? "#page=" + row.pdf_page : "");
+  a.target = "_blank"; a.rel = "noopener";
+  line.appendChild(a);
+  line.appendChild(el("span", "meta", row.pdf_page ? "page " + row.pdf_page : "page not located"));
+  j.appendChild(line);
+  j.appendChild(el("h2", "", "Passage the grade rests on"));
+  j.appendChild(highlighted(row.graded_passage, terms));
+  j.appendChild(el("h2", "", "Retrieved passage"));
+  if (row.retrieved_passage) j.appendChild(highlighted(row.retrieved_passage, terms));
+  else j.appendChild(el("p", "notice", "No system had this judgement in its top 10. It came from the independent term search."));
+  view.appendChild(j);
+
+  const c = el("section", "card");
+  c.appendChild(el("h2", "", "Your decision"));
+  const proposed = el("p", "");
+  proposed.appendChild(document.createTextNode("Proposed grade "));
+  proposed.appendChild(el("span", "badge", String(row.proposed_grade)));
+  proposed.appendChild(document.createTextNode(" " + row.grade_meaning));
+  c.appendChild(proposed);
+  const buttons = el("div", "row");
+  const add = (label, on, fn) => { const b = el("button", on ? "on" : "", label); b.type = "button"; b.addEventListener("click", fn); buttons.appendChild(b); };
+  add("Agree", d && d.decision === "agree", () => decide(row, "agree", null));
+  [0, 1, 2].filter(g => g !== Number(row.proposed_grade)).forEach(g =>
+    add("Change to " + g, d && d.decision === "change" && Number(d.human_grade) === g, () => decide(row, "change", g)));
+  add("Unsure", d && d.decision === "unsure", () => decide(row, "unsure", null));
+  c.appendChild(buttons);
+  const note = el("textarea");
+  note.placeholder = "Notes, especially why a grade should change";
+  note.setAttribute("aria-label", "Notes");
+  note.value = d ? d.reviewer_notes || "" : "";
+  note.addEventListener("change", () => {
+    const cur = store.decisions[row.review_id];
+    if (cur) { cur.reviewer_notes = note.value; save(); }
+    else { $("saved").textContent = "Choose a decision first, then add a note."; }
+  });
+  c.appendChild(el("p", ""));
+  c.appendChild(note);
+  const nav = el("div", "row");
+  const prev = el("button", "", "Previous"); prev.type = "button"; prev.addEventListener("click", () => { index--; render(); });
+  const next = el("button", "", "Next"); next.type = "button"; next.addEventListener("click", () => { index++; render(); });
+  nav.append(prev, next);
+  if (d) nav.appendChild(el("span", "status-" + d.decision, d.decision === "change" ? "Changed to " + d.human_grade : d.decision === "agree" ? "Agreed" : "Unsure"));
+  c.appendChild(nav);
+  view.appendChild(c);
+  window.scrollTo(0, 0);
+}
+function csvCell(v) {
+  const s = v === null || v === undefined ? "" : String(v);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function exportCsv() {
+  const name = $("reviewer").value.trim();
+  if (!name) { $("saved").textContent = "Enter your name first, because each decision records who made it."; $("reviewer").focus(); return; }
+  const lines = ["review_id,decision,human_grade,reviewer_notes,reviewer,reviewed_on"];
+  Object.entries(store.decisions).forEach(([id, d]) => lines.push([id, d.decision, d.human_grade, d.reviewer_notes, name, d.reviewed_on].map(csvCell).join(",")));
+  const blob = new Blob(["﻿" + lines.join("\n") + "\n"], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "human_review_decisions.csv";
+  link.click();
+  URL.revokeObjectURL(link.href);
+  $("saved").textContent = Object.keys(store.decisions).length + " decisions exported. Import them with evals/tools/human_review.py.";
+}
+function parseCsv(text) {
+  const rows = []; let row = [], cell = "", quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+    else if (ch !== "\r") cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+function restore(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rows = parseCsv(String(reader.result).replace(/^﻿/, ""));
+    const head = rows.shift() || [];
+    const at = n => head.indexOf(n);
+    const known = new Set(DATA.rows.map(r => r.review_id));
+    let count = 0;
+    rows.forEach(r => {
+      const id = r[at("review_id")];
+      if (!known.has(id) || !r[at("decision")]) return;
+      const grade = r[at("human_grade")];
+      store.decisions[id] = { decision: r[at("decision")], human_grade: grade === "" ? null : Number(grade), reviewer_notes: r[at("reviewer_notes")] || "", reviewed_on: r[at("reviewed_on")] || "" };
+      if (r[at("reviewer")]) { store.reviewer = r[at("reviewer")]; $("reviewer").value = store.reviewer; }
+      count++;
+    });
+    save(); render();
+    $("saved").textContent = count + " decisions restored from the file.";
+  };
+  reader.readAsText(file, "utf-8");
+}
+function init() {
+  const needs = [...new Set(DATA.rows.map(r => r.need_id))];
+  const sel = $("need");
+  sel.appendChild(new Option("All questions", ""));
+  needs.forEach(n => sel.appendChild(new Option(n, n)));
+  $("reviewer").value = store.reviewer || "";
+  $("reviewer").addEventListener("change", e => { store.reviewer = e.target.value.trim(); save(); });
+  sel.addEventListener("change", () => { index = 0; render(); });
+  $("undecided").addEventListener("change", () => { index = 0; render(); });
+  $("export").addEventListener("click", exportCsv);
+  $("restore").addEventListener("change", e => { if (e.target.files[0]) restore(e.target.files[0]); });
+  $("legend").textContent = "0: passing mention, citation only, or unrelated. 1: " + DATA.grades["1"] + ". 2: " + DATA.grades["2"] + ".";
+  document.addEventListener("keydown", e => {
+    if (["TEXTAREA", "INPUT", "SELECT"].includes(e.target.tagName)) return;
+    const list = visible(); const row = list[index];
+    if (e.key === "ArrowRight") { index++; render(); }
+    else if (e.key === "ArrowLeft") { index--; render(); }
+    if (!row) return;
+    const k = e.key.toLowerCase();
+    if (k === "a") decide(row, "agree", null);
+    else if (k === "u") decide(row, "unsure", null);
+    else if (["0", "1", "2"].includes(k) && Number(k) !== Number(row.proposed_grade)) decide(row, "change", Number(k));
+  });
+  showSaved();
+  render();
+}
+init();
+</script>
+</body>
+</html>

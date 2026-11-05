@@ -5,6 +5,30 @@
 judgements.json
 bangladesh_laws.json
 
+# clean_metadata.py output (derived data, rebuild with the script)
+judgements_clean.json
+judgement_labels.json
+judgement_subjects.jsonl
+
+# Raw PDFs, re-extracted text, OCR models (Phase 1)
+downloaded_pdfs/
+pdf_links.txt
+text_v2/
+text_v2_parts/
+text_v3/
+text_v3_parts/
+data_quality/failures_v3.jsonl
+data_quality/quarantine_v3/
+tessdata/
+data_quality/failures.jsonl
+data_quality/backups/
+data_quality/quarantine/
+data_quality/*.lock
+data_quality/*.pid
+legal_chroma_db_backup_pre_v2/
+legal_chroma_db_backup_pre_v3/
+.pytest_cache/
+
 # Vector DB (rebuild with scripts)
 legal_chroma_db/
 
@@ -33,3 +57,16 @@ logs/
 
 # Claude Code settings
 .claude/
+
+# Retrieval eval: run files, reranker cache and judging cards are derived or bulky; reports and qrels are committed
+evals/runs/
+evals/cache/
+evals/judging/
+
+# Hold judgement text or real people's names, so they stay local and out of the public repo (D-211)
+evals/golden/
+evals/reports/
+data_quality/
+
+# Local review page, generated from the review sheet
+evals/review/

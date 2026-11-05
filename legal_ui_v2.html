@@ -372,6 +372,22 @@ body {
 .stat-box-num { font-size: 1rem; font-weight: 600; color: var(--gold); }
 .stat-box-label { font-size: 0.6rem; color: var(--text-dim); margin-top: 1px; }
 
+/* retrieval / citation verification notes */
+.trust-note {
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: var(--text-mid);
+  background: var(--amber-bg);
+  border: 1px solid rgba(232,160,32,0.25);
+  border-radius: 6px;
+  padding: 0.45rem 0.7rem;
+  margin-bottom: 0.5rem;
+}
+.trust-note.red {
+  background: var(--red-bg);
+  border-color: rgba(201,76,76,0.25);
+}
+
 .disclaimer {
   font-size: 0.65rem;
   color: var(--text-dim);
@@ -811,7 +827,7 @@ function copyText(t) {
 }
 
 // ─── STRUCTURED ANSWER RENDERER ──────────────────────────
-function AnswerCard({ data, intent, outcomeStats, onQuickReply }) {
+function AnswerCard({ data, intent, outcomeStats, checks, onQuickReply }) {
   const [selectedAnswers, setSelectedAnswers] = useState({});
 
   if (!data) return null;
@@ -825,7 +841,8 @@ function AnswerCard({ data, intent, outcomeStats, onQuickReply }) {
     }
   }
 
-  const winPct = outcomeStats?.win_rate_pct ?? null;
+  const proc = data.procedure || {};
+  const hasProcedure = proc.steps?.length > 0 || proc.court || proc.deadline || proc.documents?.length > 0 || proc.penalties;
 
   return (
     <div>
@@ -835,53 +852,39 @@ function AnswerCard({ data, intent, outcomeStats, onQuickReply }) {
           {intent === 'law_lookup'  && '📜 LAW LOOKUP'}
           {intent === 'case_search' && '⚖️ CASE SEARCH'}
           {intent === 'prediction'  && '🔮 OUTCOME PREDICTION'}
+          {intent === 'procedure'   && '🧭 PROCEDURE'}
           {intent === 'general'     && '💬 GENERAL QUERY'}
         </div>
       )}
 
-      {/* SUMMARY */}
-      {data.summary && (
-        <div className="answer-summary">{data.summary}</div>
+      {/* VERIFICATION NOTES — backend এর retrieval/citation check এর ফলাফল */}
+      {checks?.retrieval_sufficient === false && (
+        <div className="trust-note">
+          ⚠ Database এ এই প্রশ্নের সাথে যথেষ্ট প্রাসঙ্গিক case বা আইন পাওয়া যায়নি — উত্তরটা দুর্বল ভিত্তির উপর, নিজে যাচাই করুন।
+        </div>
       )}
-
-      {/* IRAC ANALYSIS */}
-      {data.irac_analysis && (
-        <div className="answer-section">
-          <div className="answer-section-title">আইনি বিশ্লেষণ</div>
-          {[
-            { key: 'issue',           label: 'সমস্যা',     color: 'var(--amber)' },
-            { key: 'applicable_rule', label: 'প্রযোজ্য আইন', color: 'var(--blue)' },
-            { key: 'application',     label: 'প্রয়োগ',     color: 'var(--text-mid)' },
-            { key: 'conclusion',      label: 'সিদ্ধান্ত',  color: 'var(--green)' },
-          ].map(({key, label, color}) => data.irac_analysis[key] && (
-            <div key={key} style={{
-              background: 'var(--bg)', border: '1px solid var(--border)',
-              borderLeft: `3px solid ${color}`, borderRadius: '4px',
-              padding: '0.6rem 0.8rem', marginBottom: '0.4rem',
-            }}>
-              <div style={{fontSize:'0.62rem', color, marginBottom:'3px', letterSpacing:'1px', textTransform:'uppercase'}}>{label}</div>
-              <div style={{fontSize:'0.76rem', color:'var(--text-mid)', lineHeight:1.7}}>{data.irac_analysis[key]}</div>
-            </div>
-          ))}
+      {checks?.unverified_citations?.length > 0 && (
+        <div className="trust-note red">
+          ⚠ {checks.unverified_citations.length}টা citation retrieved context এ পাওয়া যায়নি, তাই তালিকা থেকে বাদ দেওয়া হয়েছে:{' '}
+          {checks.unverified_citations
+            .map(c => (c && typeof c === 'object')
+              ? (c.case_no || c.inline_case || (c.inline_section && `ধারা ${c.inline_section}`) || [c.act, c.section].filter(Boolean).join(' — '))
+              : String(c))
+            .join('; ')}
+        </div>
+      )}
+      {checks?.contradictions_detected > 0 && (
+        <div className="trust-note">
+          ⚖ {checks.contradictions_detected}টা বিষয়ে conflicting precedent পাওয়া গেছে — একই ধরনের case এ ভিন্ন রায় আছে।
         </div>
       )}
 
-      {/* ACTION CHECKLIST */}
-      {data.action_checklist?.length > 0 && (
-        <div className="answer-section">
-          <div className="answer-section-title">এখন যা করতে হবে</div>
-          <div style={{background:'var(--bg)', border:'1px solid var(--border)', borderLeft:'3px solid var(--green)', borderRadius:'4px', padding:'0.7rem 0.9rem'}}>
-            {data.action_checklist.map((step, i) => (
-              <div key={i} style={{display:'flex', gap:'8px', alignItems:'flex-start', marginBottom:'0.4rem', fontSize:'0.78rem', color:'var(--text)', lineHeight:1.65}}>
-                <span style={{color:'var(--green)', flexShrink:0, marginTop:'2px'}}>•</span>
-                {step}
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* SHORT ANSWER */}
+      {(data.short_answer || data.summary) && (
+        <div className="answer-summary">{data.short_answer || data.summary}</div>
       )}
 
-      {/* APPLICABLE LAWS */}
+      {/* APPLICABLE LAWS — backend এ verify হওয়া, উত্তরে cite করা আইন */}
       {data.applicable_laws?.length > 0 && (
         <div className="answer-section">
           <div className="answer-section-title">প্রযোজ্য আইন</div>
@@ -907,170 +910,75 @@ function AnswerCard({ data, intent, outcomeStats, onQuickReply }) {
       {/* RELEVANT CASES */}
       {data.relevant_cases?.length > 0 && (
         <div className="answer-section">
-          <div className="answer-section-title">সংশ্লিষ্ট মামলা</div>
+          <div className="answer-section-title">সংশ্লিষ্ট রায়</div>
           {data.relevant_cases.map((c, i) => (
             <div key={i} style={{
               background:'var(--bg)', border:'1px solid var(--border)',
               borderRadius:'4px', padding:'0.5rem 0.8rem', marginBottom:'0.3rem',
-              display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.5rem',
             }}>
-              <div>
-                <div style={{fontSize:'0.72rem', color:'var(--gold)', fontWeight:600}}>
-                  {c.case_no} ({c.year}) [{c.court}]
-                </div>
-                {c.why_relevant && (
-                  <div style={{fontSize:'0.68rem', color:'var(--text-dim)', marginTop:'2px', lineHeight:1.6}}>
-                    {c.why_relevant}
-                  </div>
-                )}
+              <div style={{fontSize:'0.72rem', color:'var(--gold)', fontWeight:600}}>
+                {c.case_no}{c.year ? ` (${c.year})` : ''}{c.division ? ` [${c.division}]` : ''}
               </div>
-              <span className={`outcome-badge ${outcomeColor(c.outcome)}`} style={{flexShrink:0}}>
-                {outcomeLabel(c.outcome)}
-              </span>
+              {c.holding && (
+                <div style={{fontSize:'0.7rem', color:'var(--text-mid)', marginTop:'2px', lineHeight:1.6}}>
+                  {c.holding}
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {/* HONEST ASSESSMENT */}
-      {data.honest_assessment && (
+      {/* PROCEDURE */}
+      {hasProcedure && (
         <div className="answer-section">
-          <div className="answer-section-title">সৎ মূল্যায়ন</div>
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.4rem'}}>
-            {data.honest_assessment.strengths?.length > 0 && (
-              <div style={{background:'var(--green-bg)', border:'1px solid rgba(76,175,130,0.2)', borderRadius:'6px', padding:'0.6rem'}}>
-                <div style={{fontSize:'0.62rem', color:'var(--green)', marginBottom:'0.3rem', fontWeight:600}}>আপনার পক্ষে</div>
-                {data.honest_assessment.strengths.map((s, i) => (
-                  <div key={i} style={{fontSize:'0.72rem', color:'var(--text-mid)', marginBottom:'2px', lineHeight:1.6}}>• {s}</div>
-                ))}
+          <div className="answer-section-title">প্রক্রিয়া</div>
+          <div style={{background:'var(--bg)', border:'1px solid var(--border)', borderLeft:'3px solid var(--green)', borderRadius:'4px', padding:'0.7rem 0.9rem'}}>
+            {proc.steps?.map((step, i) => (
+              <div key={i} style={{fontSize:'0.78rem', color:'var(--text)', lineHeight:1.65, marginBottom:'0.3rem'}}>{step}</div>
+            ))}
+            {[
+              ['court',     'আদালত / কর্তৃপক্ষ', 'var(--blue)'],
+              ['deadline',  'সময়সীমা',          'var(--amber)'],
+              ['cost',      'খরচ',               'var(--text-mid)'],
+              ['penalties', 'শাস্তি / পরিণতি',   'var(--red)'],
+            ].map(([key, label, color]) => proc[key] && (
+              <div key={key} style={{marginTop:'0.5rem'}}>
+                <div style={{fontSize:'0.62rem', color, marginBottom:'2px'}}>{label}</div>
+                <div style={{fontSize:'0.75rem', color:'var(--text-mid)', lineHeight:1.65}}>{proc[key]}</div>
               </div>
-            )}
-            {data.honest_assessment.weaknesses?.length > 0 && (
-              <div style={{background:'var(--red-bg)', border:'1px solid rgba(201,76,76,0.2)', borderRadius:'6px', padding:'0.6rem'}}>
-                <div style={{fontSize:'0.62rem', color:'var(--red)', marginBottom:'0.3rem', fontWeight:600}}>সমস্যা হতে পারে</div>
-                {data.honest_assessment.weaknesses.map((w, i) => (
-                  <div key={i} style={{fontSize:'0.72rem', color:'var(--text-mid)', marginBottom:'2px', lineHeight:1.6}}>• {w}</div>
-                ))}
-              </div>
-            )}
-          </div>
-          {data.honest_assessment.critical_factors?.length > 0 && (
-            <div style={{background:'var(--amber-bg)', border:'1px solid rgba(232,160,32,0.2)', borderRadius:'6px', padding:'0.6rem', marginTop:'0.4rem'}}>
-              <div style={{fontSize:'0.62rem', color:'var(--amber)', marginBottom:'0.3rem', fontWeight:600}}>অবশ্যই লাগবে (না থাকলে case দুর্বল)</div>
-              {data.honest_assessment.critical_factors.map((f, i) => (
-                <div key={i} style={{fontSize:'0.72rem', color:'var(--text-mid)', marginBottom:'2px', lineHeight:1.6}}>• {f}</div>
-              ))}
-            </div>
-          )}
-          {data.honest_assessment.win_rate_context && (
-            <div style={{fontSize:'0.7rem', color:'var(--text-dim)', marginTop:'0.4rem', fontStyle:'italic'}}>
-              {data.honest_assessment.win_rate_context}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* STRATEGY */}
-      {data.strategy && (
-        <div className="answer-section">
-          <div className="answer-section-title">কৌশল ও পরিকল্পনা</div>
-          <div style={{background:'var(--bg)', border:'1px solid var(--border)', borderRadius:'6px', padding:'0.8rem'}}>
-            {data.strategy.recommended_action && (
-              <div style={{marginBottom:'0.5rem'}}>
-                <div style={{fontSize:'0.62rem', color:'var(--gold)', marginBottom:'2px'}}>সেরা পদক্ষেপ</div>
-                <div style={{fontSize:'0.76rem', color:'var(--text)', lineHeight:1.7}}>{data.strategy.recommended_action}</div>
-              </div>
-            )}
-            {data.strategy.forum && (
-              <div style={{marginBottom:'0.5rem'}}>
-                <div style={{fontSize:'0.62rem', color:'var(--blue)', marginBottom:'2px'}}>কোথায় যাবেন</div>
-                <div style={{fontSize:'0.75rem', color:'var(--text-mid)'}}>{data.strategy.forum}</div>
-              </div>
-            )}
-            {data.strategy.relief_to_seek && (
-              <div style={{marginBottom:'0.5rem'}}>
-                <div style={{fontSize:'0.62rem', color:'var(--green)', marginBottom:'2px'}}>কী চাইবেন</div>
-                <div style={{fontSize:'0.75rem', color:'var(--text-mid)'}}>{data.strategy.relief_to_seek}</div>
-              </div>
-            )}
-            {data.strategy.documents_needed?.length > 0 && (
-              <div style={{marginBottom:'0.5rem'}}>
+            ))}
+            {proc.documents?.length > 0 && (
+              <div style={{marginTop:'0.5rem'}}>
                 <div style={{fontSize:'0.62rem', color:'var(--amber)', marginBottom:'4px'}}>প্রয়োজনীয় কাগজপত্র</div>
-                {data.strategy.documents_needed.map((d, i) => (
+                {proc.documents.map((d, i) => (
                   <div key={i} style={{fontSize:'0.72rem', color:'var(--text-mid)', marginBottom:'2px', display:'flex', gap:'6px'}}>
                     <span style={{color:'var(--amber)', flexShrink:0}}>•</span>{d}
                   </div>
                 ))}
               </div>
             )}
-            {data.strategy.immediate_steps && (
-              <div style={{background:'var(--surface3)', borderRadius:'4px', padding:'0.5rem 0.7rem', marginTop:'0.3rem'}}>
-                <div style={{fontSize:'0.62rem', color:'var(--green)', marginBottom:'3px', fontWeight:600}}>এখনই করুন</div>
-                <div style={{fontSize:'0.74rem', color:'var(--text)', lineHeight:1.7, whiteSpace:'pre-wrap'}}>{data.strategy.immediate_steps}</div>
-              </div>
-            )}
-            {data.strategy.estimated_timeline && (
-              <div style={{fontSize:'0.68rem', color:'var(--text-dim)', marginTop:'0.4rem'}}>
-                সম্ভাব্য সময়: {data.strategy.estimated_timeline}
-              </div>
-            )}
           </div>
         </div>
       )}
 
-      {/* OUTCOME PREDICTION */}
-      {(data.outcome_prediction || winPct !== null) && (
+      {/* RISKS */}
+      {data.risks?.length > 0 && (
         <div className="answer-section">
-          <div className="answer-section-title">ফলাফল বিশ্লেষণ</div>
-          <div className="prediction-card">
-            {winPct !== null && (
-              <>
-                <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.72rem', marginBottom:'4px'}}>
-                  <span className="text-dim">Historical win rate</span>
-                  <span className="text-gold" style={{fontWeight:600}}>{winPct}%</span>
-                </div>
-                <div className="win-rate-bar">
-                  <div className="win-rate-fill" style={{width:`${winPct}%`}} />
-                </div>
-                {outcomeStats?.total_similar_cases && (
-                  <div style={{fontSize:'0.63rem', color:'var(--text-dim)', marginBottom:'0.6rem'}}>
-                    {outcomeStats.total_similar_cases} টি similar case বিশ্লেষণ ({outcomeStats.year_range})
-                  </div>
-                )}
-              </>
-            )}
-            {data.outcome_prediction?.historical_win_rate && !winPct && (
-              <div style={{fontSize:'0.75rem', color:'var(--gold)', marginBottom:'0.5rem', fontWeight:600}}>
-                {data.outcome_prediction.historical_win_rate}
-              </div>
-            )}
-            {data.outcome_prediction?.factors_in_your_favor?.length > 0 && (
-              <div style={{marginBottom:'0.5rem'}}>
-                <div style={{fontSize:'0.63rem', color:'var(--green)', marginBottom:'0.3rem'}}>আপনার পক্ষে কাজ করবে</div>
-                {data.outcome_prediction.factors_in_your_favor.map((f, i) => (
-                  <div key={i} className="factor"><span className="factor-icon text-green">+</span>{f}</div>
-                ))}
-              </div>
-            )}
-            {data.outcome_prediction?.factors_against?.length > 0 && (
-              <div style={{marginBottom:'0.5rem'}}>
-                <div style={{fontSize:'0.63rem', color:'var(--red)', marginBottom:'0.3rem'}}>বিপক্ষে যেতে পারে</div>
-                {data.outcome_prediction.factors_against.map((f, i) => (
-                  <div key={i} className="factor"><span className="factor-icon text-red">−</span>{f}</div>
-                ))}
-              </div>
-            )}
-            {data.outcome_prediction?.estimated_timeline && (
-              <div style={{fontSize:'0.72rem', color:'var(--text-mid)', marginTop:'0.4rem'}}>
-                {data.outcome_prediction.estimated_timeline}
-              </div>
-            )}
-            {data.outcome_prediction?.recommendation && (
-              <div style={{fontSize:'0.74rem', color:'var(--amber)', marginTop:'0.4rem', fontWeight:500}}>
-                {data.outcome_prediction.recommendation}
-              </div>
-            )}
+          <div className="answer-section-title">ঝুঁকি</div>
+          <div style={{background:'var(--red-bg)', border:'1px solid rgba(201,76,76,0.2)', borderRadius:'6px', padding:'0.6rem'}}>
+            {data.risks.map((r, i) => (
+              <div key={i} style={{fontSize:'0.72rem', color:'var(--text-mid)', marginBottom:'2px', lineHeight:1.6}}>• {r}</div>
+            ))}
           </div>
+        </div>
+      )}
+
+      {/* WHEN TO SEE A LAWYER */}
+      {data.when_to_see_lawyer && (
+        <div className="answer-section">
+          <div className="answer-section-title">কখন আইনজীবীর কাছে যাবেন</div>
+          <div style={{fontSize:'0.75rem', color:'var(--text-mid)', lineHeight:1.7}}>{data.when_to_see_lawyer}</div>
         </div>
       )}
 
@@ -1281,6 +1189,7 @@ function ChatTab() {
         intent: data.intent,
         outcomeStats: data.outcome_stats,
         sources: data.sources,
+        checks: data,
       }]);
     } catch {
       setMessages(prev => [...prev, {
@@ -1326,6 +1235,7 @@ function ChatTab() {
                   data={msg.answer}
                   intent={msg.intent}
                   outcomeStats={msg.outcomeStats}
+                  checks={msg.checks}
                   onQuickReply={sendMessage}
                 />
               ) : msg.text}
@@ -1519,6 +1429,7 @@ function PredictTab() {
               data={result.prediction}
               intent="prediction"
               outcomeStats={result.outcome_stats}
+              checks={result}
               onQuickReply={(text) => {
                 const updated = situation.trim() ? `${situation}\n${text}` : text;
                 setSituation(updated);
@@ -1593,7 +1504,7 @@ function SearchTab() {
       <div className="filter-bar">
         <span className="filter-bar-label">Search in:</span>
         <div className="search-type-toggle">
-          {[['both','Both'],['judgements','Cases'],['laws','Laws']].map(([v,l]) => (
+          {[['both','Both'],['cases','Cases'],['laws','Laws']].map(([v,l]) => (
             <button key={v} className={`toggle-btn ${searchType===v?'active':''}`}
               onClick={() => setSearchType(v)}>{l}</button>
           ))}
@@ -1639,12 +1550,12 @@ function SearchTab() {
       {results && (
         <div className="results-grid">
           {/* Cases */}
-          {results.judgements?.length > 0 && (
+          {results.cases?.length > 0 && (
             <>
               <div className="section-label">
-                ⚖️ Cases ({results.judgements.length})
+                ⚖️ Cases ({results.cases.length})
               </div>
-              {results.judgements.map((c, i) => (
+              {results.cases.map((c, i) => (
                 <div key={i} className="result-card">
                   <div className="result-card-header">
                     <div className="result-card-title">📄 {c.case_no}</div>
@@ -1712,7 +1623,7 @@ function SearchTab() {
             <div className="empty-state text-red">❌ Search failed. Server চালু আছে কিনা check করো।</div>
           )}
 
-          {!results.error && !results.judgements?.length && !results.laws?.length && (
+          {!results.error && !results.cases?.length && !results.laws?.length && (
             <div className="empty-state">কোনো result পাওয়া যায়নি। অন্য keyword try করুন।</div>
           )}
         </div>
