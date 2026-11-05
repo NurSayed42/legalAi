@@ -33,6 +33,8 @@ python ingestion/integrity.py verify-chroma --db evals/cache/chroma_eval_copy --
 
 ## Files
 
+Everything under `golden/` and `reports/` quotes judgements or names real people, so those folders are gitignored and aren't in the public repository (D-211). The commands below need them on your machine.
+
 | File | What it is |
 |---|---|
 | `golden/retrieval_queries.jsonl` | The frozen queries |

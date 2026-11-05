@@ -45,7 +45,7 @@ The API still runs on the v1 index. BM25 did best in the benchmark so far, but i
 
 **Scraping approach:** `requests` + `BeautifulSoup` to walk the judgement listing pages and collect PDF links (paginated, with retry + resume-from-existing-file support so re-runs don't re-download), then `PyPDF2` to extract raw text from each downloaded PDF (`extract_text.py`). Law pages are scraped directly as HTML (act-details pages), with footnote markers and superscripts stripped during cleaning.
 
-**Text quality:** all 8,615 PDFs were re-extracted with a cascade (`ingestion/pdf_extract.py`: PyMuPDF → pdfplumber → Tesseract `ben+eng`), turning Bangla that `PyPDF2` read as mojibake (`q¡C−L¡VÑ` = "হাইকোর্ট") into real text. 59.7% of pages come from the text layer and 40.3% needed some OCR. The full report is [`data_quality/phase1_data_quality.md`](data_quality/phase1_data_quality.md).
+**Text quality:** all 8,615 PDFs were re-extracted with a cascade (`ingestion/pdf_extract.py`: PyMuPDF → pdfplumber → Tesseract `ben+eng`), turning Bangla that `PyPDF2` read as mojibake (`q¡C−L¡VÑ` = "হাইকোর্ট") into real text. 59.7% of pages come from the text layer and 40.3% needed some OCR. The full report is `data_quality/phase1_data_quality.md`.
 
 | Audit bucket | v1 (`PyPDF2`) | v2 (cascade) | v2, strict rules | v3, strict rules |
 |---|---|---|---|---|
@@ -55,7 +55,7 @@ The API still runs on the v1 index. BM25 did best in the benchmark so far, but i
 
 The strict rules add lost OCR lines and corrupted Bangla. v1 wasn't measured on them. v3 re-OCRs 453 files with fixed settings and copies the other 8,162 from v2. On the pages v2 OCRed, lines kept rose from 93.25% to 99.31%, and Death Reference 58/2013 part 2 from 84.29% to 99.97%.
 
-Indexes: `bangladesh_judgements` (v1, 45,571 chunks, used by the API), `bangladesh_judgements_v2` (42,762 chunks) and `bangladesh_judgements_v3` (34,217 chunks). Neither v2 nor v3 is used by the API yet. Full results are in [`data_quality/phase1_data_quality.md`](data_quality/phase1_data_quality.md).
+Indexes: `bangladesh_judgements` (v1, 45,571 chunks, used by the API), `bangladesh_judgements_v2` (42,762 chunks) and `bangladesh_judgements_v3` (34,217 chunks). Neither v2 nor v3 is used by the API yet. Full results are in `data_quality/phase1_data_quality.md`.
 
 **Known data gaps:**
 - **Bangla search is the weakest part:** raw Bangla queries score well below English with every method, and they reach very few of the relevant judgements written in English (section 9).
@@ -202,7 +202,9 @@ python evals/run_experiment.py --status          # what Phase 3's experiments ar
 
 Under a rule fixed before the runs, BM25 beat dense and hybrid in both languages, and the reranker improved hybrid. Hybrid + reranker vs BM25 wasn't a declared comparison and shows no measured difference. The embedding model reads only about the first 80 of each chunk's 600 words, which may explain part of dense search's score.
 
-The full results and recommendations are in [`evals/reports/phase2_retrieval_comparison.md`](evals/reports/phase2_retrieval_comparison.md), and what's still outstanding is in [`evals/reports/phase2_status.md`](evals/reports/phase2_status.md). The API doesn't use these results yet.
+The API doesn't use these results yet.
+
+The evaluation data (`evals/golden/`), the detailed reports (`evals/reports/`) and the data-quality audits (`data_quality/`) quote judgements or name real people, so they're kept locally and aren't in this repository. That means the benchmark can't be re-run or re-scored from a fresh clone, and the tests that need those files are skipped.
 
 **Also in `evals/`:** 22 lay-language queries, still being graded so no results yet; generation, citation and abstention metrics, with draft golden and adversarial sets, not yet run with a real LLM; and a Phase 3 experiment plan that won't run until the labels are reviewed.
 
@@ -241,11 +243,11 @@ api_v2.py                 # Previous API version
 legal_ui_v2.html          # Single-file web UI for the API (React from a CDN, no build step)
 ingestion/                # pdf_extract.py (extraction cascade), run_phase1.py (full run, safe to re-run),
                           # quality_audit.py, text_checks.py (quality), integrity.py (proves nothing changed)
-data_quality/             # phase1_data_quality.md (report), audits, text checks
+data_quality/             # Local only: phase 1 report, audits, text checks
 retrieval/                # hybrid.py, rerank.py and Phase 3 variants, for evaluation only, not used by the API
 llm/                      # client.py (retry, fallback, cache, token log) and prompts, for evaluation only so far
 evals/                    # README.md, run_eval.py, retrieval_*.py, pipeline_*.py, run_experiment.py, serve_live.py,
-                          # golden/, metrics/, tools/, experiments/, reports/
+                          # metrics/, tools/, experiments/; golden/ and reports/ are local only
 tests/                    # offline tests, plus test_regression.py (live server)
 docs/DECISIONS.md         # assumptions and design decisions
 SPEC.md                   # upgrade plan (phases 1–8)

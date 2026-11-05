@@ -63,5 +63,10 @@ evals/runs/
 evals/cache/
 evals/judging/
 
-# Local review page, generated from the committed sheet
+# Hold judgement text or real people's names, so they stay local and out of the public repo (D-211)
+evals/golden/
+evals/reports/
+data_quality/
+
+# Local review page, generated from the review sheet
 evals/review/
