@@ -19,9 +19,23 @@ The laws collection is not exactly the original: on 2026-10-27 `clean_metadata.p
 
 ## Phase 2 — evaluation harness
 
+**D-205 — Phase 2 is only partly done.** The retrieval framework, benchmark and comparison are finished. SPEC's generation, citation and abstention metrics, the adversarial set and the `--system pipeline` baseline aren't. They need the pipeline and LLM calls, and the user asked for no API restart at this stage, so its acceptance criteria aren't met. Moving to Phase 3 is the user's decision.
+
+**D-204 — Retrieval results and what they rest on.** Full report: `evals/reports/phase2_retrieval_comparison.md`. nDCG@10, Bangla / English: dense 0.061 / 0.414, BM25 0.559 / 0.849, hybrid 0.312 / 0.670, hybrid + rerank 0.546 / 0.843. All 8 declared comparisons passed the rule in D-201: BM25 beats dense and hybrid, hybrid beats dense, reranking beats hybrid, in both languages. Hybrid + rerank vs BM25 wasn't declared; it's exploratory and shows no measured difference.
+
+Limits to keep in view:
+- The queries are keyword-style, which suits BM25. Lay questions aren't tested, so this doesn't show dense is useless.
+- 1,247 grades by one rater, from excerpts. Key-term cards could favour BM25. A wording check before scoring changed 14 zeros. Of 30 random no-term zeros, 0 were wrong; of 40 zeros only dense retrieved, 1 was wrong. After seeing results I corrected that grade and one similar one, in `t-03`, for consistency with how Bangla land cases were graded. Even if all 359 dense-only zeros were relevant, BM25 stays ahead (+0.004 Bangla, +0.091 English).
+- For 3 Death Ref 58 needs (`d-03` to `d-05`), cards with no key term weren't read individually, because a corpus search shows only that case mentions those events.
+- Hybrid loses to BM25 at all 10 fusion depth and k settings tried, so the guessed `fusion_depth` didn't decide this.
+
+The Phase 1 reading of Death Ref 58 needs correcting: the direct Pilkhana query that lost the case in v3 was dense-only. BM25 ranks it first on all 8 content queries. The cap's cost is at passage level: 7% of a sample of rare words from the case are in the index, and the name of one central person is mentioned 26 times in the text and never in the index. The 400 cap stays as the user instructed.
+
+Also corrected: I blamed the embedding model for off-topic Bangla results in D-122 without testing it. It remains the leading suspect, but that needs Phase 3's model comparison. Short junk chunks are over-represented in dense's Bangla results and were my second suspect, yet removing them doesn't help.
+
 **D-203 — Two hazards to measure, not fix yet.** Both were found before any BM25 result, by reading the code and counting characters.
-- *Unicode form:* v3 stores `য়` decomposed 208,712 times and precomposed 10 times; `ড়` and `ঢ়` are always decomposed. The API's tokenizer doesn't normalize, so a query typed with the single-character form can't match those tokens. Which form real users' keyboards send isn't known. A diagnostic run repeats the Bangla queries in that form.
-- *Fusion:* `api_v3._rrf` adds up the scores of every chunk of a file, which may favour long documents. A unit test shows a large file beating a small one that ranked first in both lists. `hybrid_api` keeps that behaviour, and `hybrid` doesn't, so the effect can be measured.
+- *Unicode form:* v3 stores `য়` decomposed 208,712 times and precomposed 10 times; `ড়` and `ঢ়` are always decomposed. The API's tokenizer doesn't normalize, so a query typed with the single-character form can't match those tokens. Which form real users' keyboards send isn't known. A diagnostic run repeats the Bangla queries in that form. *Result:* BM25's top 10 changed on 16 of the 17 queries containing these letters, and nDCG fell from 0.489 to 0.428 (a lower bound, 78% graded). Dense didn't change.
+- *Fusion:* `api_v3._rrf` adds up the scores of every chunk of a file, which may favour long documents. A unit test shows a large file beating a small one that ranked first in both lists. `hybrid_api` keeps that behaviour, and `hybrid` doesn't, so the effect can be measured. *Result:* not supported. Large cases are 24.1% of `hybrid_api`'s top 10 against 23.5%. At a depth of 12 per method this is a weak test.
 
 **D-202 — Labels are verified by Claude, not by a person.** SPEC says a human verifies every expected source, and the request asks for manually verified judgements. I can't be that human, and asking would stall the work, so:
 - Claude grades each pooled case by reading term counts and excerpts from `text_v3/`, without seeing which system retrieved it. This isn't a reading of whole judgements or a lawyer's opinion.

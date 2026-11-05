@@ -172,7 +172,19 @@ python -m pytest tests/test_regression.py -v     # 4 live questions: cheque dish
 python evals/run_eval.py --label after           # 20 questions → evals/reports/after.json
 python evals/run_eval.py --compare before after  # side-by-side summary
 python evals/retrieval_smoke.py                  # v1 vs v2 vector search on 10 questions, no API or LLM
+python evals/retrieval_score.py                  # retrieval benchmark, no API or LLM (evals/README.md)
 ```
+
+**Retrieval benchmark (provisional).** 95 Bangla and English queries compare four retrieval methods on the v3 data, with no LLM. Claude graded the relevance labels from excerpts, and they're awaiting human review. The queries are keyword-style, so these numbers don't cover lay questions or the API's own query rewriting.
+
+| Method, nDCG@10 | Bangla | English | Seconds per query |
+|---|---:|---:|---:|
+| Dense vectors | 0.061 | 0.414 | 0.2 |
+| BM25 | 0.559 | 0.849 | 0.9 |
+| Hybrid | 0.312 | 0.670 | 1.1 |
+| Hybrid + reranker | 0.546 | 0.843 | 36 |
+
+The full results and recommendations are in [`evals/reports/phase2_retrieval_comparison.md`](evals/reports/phase2_retrieval_comparison.md). The API doesn't use these results yet.
 
 `run_eval.py` logs, per question: retrieved laws and cases, `applicable_laws` count, `citation_verified`, unverified citations, retrieval attempts, sufficiency, persona-claim detection and latency.
 
@@ -187,6 +199,7 @@ python evals/retrieval_smoke.py                  # v1 vs v2 vector search on 10 
 - **OCR accuracy** — on clean Bangla: 97.1% character similarity, 87.9% word recall. Accuracy on legacy-font pages has only been hand-checked on one page, and OCR adds some Latin junk to Bangla text.
 - **Outcome coverage** — the rule-based extractor can't determine the outcome for ~53% of judgements (`unknown`), which limits `outcome_stats` and contradiction detection.
 - **Reranker threshold** (`RERANK_THRESHOLD = 0.05`) was set from a small calibration probe, not tuned on real query logs.
+- **Bangla queries barely reach English judgements** — most relevant judgements are in English, and on the retrieval benchmark raw Bangla queries find very few of them with any method. The API's LLM rewrite may help, but that isn't measured yet.
 - **Inline citations** are flagged, not removed — removing a section number from the middle of a sentence would garble it.
 - **Statute currency** — repealed/amended sections aren't tracked yet.
 
@@ -208,8 +221,9 @@ legal_ui_v2.html          # Single-file web UI for the API
 ingestion/                # pdf_extract.py (extraction cascade), run_phase1.py (full run, safe to re-run),
                           # quality_audit.py, text_checks.py (quality), integrity.py (proves nothing changed)
 data_quality/             # phase1_data_quality.md (report), audits, text checks
-evals/                    # run_eval.py, retrieval_smoke.py, reports/
-tests/                    # test_rules.py, test_pdf_extract.py (offline), test_regression.py (live server)
+retrieval/                # hybrid.py, rerank.py: retrieval methods for evaluation, not yet used by the API
+evals/                    # README.md, run_eval.py, retrieval_run.py, retrieval_score.py, golden/, metrics/, tools/, reports/
+tests/                    # offline tests, plus test_regression.py (live server)
 docs/DECISIONS.md         # assumptions and design decisions
 SPEC.md                   # upgrade plan (phases 1–8)
 requirements.txt
