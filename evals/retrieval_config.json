@@ -1,0 +1,22 @@
+{
+  "embed_model": "paraphrase-multilingual-MiniLM-L12-v2",
+  "fetch_depth": 200,
+  "fusion_depth": 100,
+  "rrf_k": 60,
+  "rerank_model": "BAAI/bge-reranker-v2-m3",
+  "rerank_max_length": 256,
+  "rerank_text_chars": 2000,
+  "rerank_candidates": 50,
+  "api_retrieve_n": 12,
+  "k": 10,
+  "relevant_threshold": 1,
+  "strict_threshold": 2,
+  "primary_metric": "ndcg",
+  "bootstrap_samples": 10000,
+  "permutation_samples": 10000,
+  "seed": 20261105,
+  "alpha": 0.05,
+  "large_case_top_share": 0.01,
+  "similarity_thresholds": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+  "rerank_api_threshold": 0.05
+}

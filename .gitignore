@@ -57,3 +57,8 @@ logs/
 
 # Claude Code settings
 .claude/
+
+# Retrieval eval: run files, reranker cache and judging cards are derived or bulky; reports and qrels are committed
+evals/runs/
+evals/cache/
+evals/judging/
