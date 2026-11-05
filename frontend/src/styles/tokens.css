@@ -1,0 +1,127 @@
+/* Ink & Brass design tokens. See frontend/DESIGN.md. Contrast is checked by qa/contrast.mjs, which reads this file. */
+
+:root {
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 260ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-distance: 4px;
+  --motion-rise: 8px;
+  --press-scale: 0.98;
+
+  --header-h: 56px;
+  --nav-h: 64px;
+  --kb: 0px;
+  --bottom-inset: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + var(--kb));
+
+  --paper: #fbf9f4;
+  --paper-fg: #1c1a16;
+  --paper-muted: #5c564b;
+  --paper-line: rgba(28, 26, 22, 0.14);
+}
+
+@media (min-width: 768px) {
+  :root {
+    --header-h: 64px;
+    --nav-h: 0px;
+    --bottom-inset: calc(16px + var(--kb));
+  }
+}
+
+/* The keyboard is up on a phone: the bottom nav gets out of the way. */
+@media (max-width: 767px) {
+  :root[data-typing="true"] {
+    --nav-h: 0px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-distance: 0px;
+    --motion-rise: 0px;
+    --press-scale: 1;
+  }
+}
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-0: #0a0b0d;
+  --bg-1: #111317;
+  --bg-2: #171a1f;
+  --bg-3: #1e2228;
+  --glass: rgba(23, 26, 31, 0.82);
+  --line-1: rgba(255, 255, 255, 0.06);
+  --line-2: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.34);
+
+  --text-1: #f2efe8;
+  --text-2: #b9b4a8;
+  --text-3: #9b968b;
+
+  --gold-400: #e2b95c;
+  --gold-500: #c9a14a;
+  --gold-600: #a8843a;
+  --gold-glow: rgba(201, 161, 74, 0.18);
+  --gold-tint: rgba(201, 161, 74, 0.12);
+  --accent-text: #e2b95c;
+  --on-gold: #17130a;
+  --focus: #e2b95c;
+
+  --success: #4fb286;
+  --danger: #e5675e;
+  --warning: #e0a43b;
+  --info: #6fa8dc;
+  --success-tint: rgba(79, 178, 134, 0.12);
+  --danger-tint: rgba(229, 103, 94, 0.12);
+  --warning-tint: rgba(224, 164, 59, 0.12);
+  --info-tint: rgba(111, 168, 220, 0.12);
+
+  --scrim: rgba(5, 6, 8, 0.64);
+  --shadow-1: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 2px 4px rgba(0, 0, 0, 0.24), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-3: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 8px rgba(0, 0, 0, 0.28), 0 20px 48px rgba(0, 0, 0, 0.4);
+  --ambient: radial-gradient(52% 42% at 50% 42%, rgba(201, 161, 74, 0.085), transparent 100%);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-0: #faf8f3;
+  --bg-1: #ffffff;
+  --bg-2: #f6f3ec;
+  --bg-3: #efebe2;
+  --glass: rgba(255, 255, 255, 0.86);
+  --line-1: rgba(26, 26, 26, 0.08);
+  --line-2: rgba(26, 26, 26, 0.14);
+  --line-strong: rgba(26, 26, 26, 0.5);
+
+  --text-1: #1a1a1a;
+  --text-2: #4c4940;
+  --text-3: #66625a;
+
+  --gold-400: #b8923f;
+  --gold-500: #a07c33;
+  --gold-600: #8a6b2b;
+  --gold-glow: rgba(168, 132, 58, 0.14);
+  --gold-tint: rgba(168, 132, 58, 0.12);
+  --accent-text: #6f5414;
+  --on-gold: #17130a;
+  --focus: #8a6b2b;
+
+  --success: #17694a;
+  --danger: #b1342b;
+  --warning: #7f5a0c;
+  --info: #24598c;
+  --success-tint: rgba(23, 105, 74, 0.1);
+  --danger-tint: rgba(177, 52, 43, 0.09);
+  --warning-tint: rgba(127, 90, 12, 0.1);
+  --info-tint: rgba(36, 89, 140, 0.09);
+
+  --scrim: rgba(26, 24, 18, 0.42);
+  --shadow-1: 0 1px 2px rgba(40, 32, 16, 0.06);
+  --shadow-2: 0 1px 2px rgba(40, 32, 16, 0.06), 0 8px 24px rgba(40, 32, 16, 0.08);
+  --shadow-3: 0 2px 4px rgba(40, 32, 16, 0.06), 0 20px 48px rgba(40, 32, 16, 0.14);
+  --ambient: radial-gradient(52% 42% at 50% 42%, rgba(168, 132, 58, 0.1), transparent 100%);
+}

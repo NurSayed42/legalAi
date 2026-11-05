@@ -7,7 +7,18 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from evals.serve_live import API_LINE, HOST, PRODUCTION_PORT, SAME_ORIGIN_LINE, UI_FILE, build_app, check_port, served_ui
+from evals.serve_live import (
+    API_LINE,
+    HOST,
+    IMMUTABLE,
+    PRODUCTION_PORT,
+    SAME_ORIGIN_LINE,
+    UI_FILE,
+    build_app,
+    check_port,
+    served_build,
+    served_ui,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = UI_FILE.read_text(encoding="utf-8")
@@ -60,6 +71,85 @@ def test_root_is_the_ui_and_api_paths_reach_the_pipeline():
     assert "ui page" in client.get("/").text
     assert client.get("/api/stats").json() == {"from": "pipeline"}
     assert client.get("/live-info").json() == {"production_api": False}
+
+
+@pytest.fixture
+def built(tmp_path):
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "assets" / "app-abc123.js").write_text("console.log('x');" * 100, encoding="utf-8")
+    (tmp_path / "icons").mkdir()
+    (tmp_path / "icons" / "icon.png").write_bytes(b"png")
+    (tmp_path / "sw.js").write_text("// sw", encoding="utf-8")
+    (tmp_path / "manifest.webmanifest").write_text("{}", encoding="utf-8")
+    (tmp_path / "index.html").write_text("<html><head></head><body>new ui</body></html>", encoding="utf-8")
+    return tmp_path
+
+
+def _built_client(dist):
+    api = FastAPI()
+
+    @api.get("/api/stats")
+    def stats():
+        return {"from": "pipeline"}
+
+    @api.post("/api/chat")
+    def chat():
+        return {"answer": "from pipeline"}
+
+    page = served_build((dist / "index.html").read_text(encoding="utf-8"), "v1")
+    return TestClient(build_app(api, page, {"production_api": False}, dist))
+
+
+def test_built_page_says_its_a_test_copy_and_isnt_cached(built):
+    response = _built_client(built).get("/")
+    assert '<meta name="legalai-instance" content="v1">' in response.text
+    assert "new ui" in response.text
+    assert response.headers["cache-control"] == "no-cache"
+
+
+def test_a_production_build_has_no_test_copy_tag(built):
+    assert "legalai-instance" not in (built / "index.html").read_text(encoding="utf-8")
+
+
+def test_hashed_assets_cache_for_a_year_and_are_compressed(built):
+    response = _built_client(built).get("/assets/app-abc123.js", headers={"Accept-Encoding": "gzip"})
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == IMMUTABLE
+    assert response.headers["content-encoding"] == "gzip"
+
+
+def test_service_worker_and_manifest_are_revalidated_at_the_root(built):
+    client = _built_client(built)
+    for path in ("/sw.js", "/manifest.webmanifest"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-cache"
+    assert "javascript" in client.get("/sw.js").headers["content-type"]
+
+
+def test_unknown_page_falls_back_to_the_app(built):
+    response = _built_client(built).get("/some/page", headers={"Accept": "text/html"})
+    assert response.status_code == 200
+    assert "new ui" in response.text
+
+
+def test_the_fallback_never_hides_a_missing_api_or_asset(built):
+    client = _built_client(built)
+    assert client.get("/api/nothing", headers={"Accept": "text/html"}).status_code == 404
+    assert client.get("/assets/missing.js", headers={"Accept": "*/*"}).status_code == 404
+
+
+def test_api_still_reaches_the_pipeline_with_the_build_mounted(built):
+    client = _built_client(built)
+    assert client.get("/api/stats").json() == {"from": "pipeline"}
+    response = client.post("/api/chat", json={})
+    assert response.json() == {"answer": "from pipeline"}
+    assert "content-encoding" not in response.headers
+
+
+def test_built_page_needs_a_head_tag():
+    with pytest.raises(ValueError):
+        served_build("<html>no head</html>", "v1")
 
 
 def test_the_real_api_routes_the_ui_calls_exist():

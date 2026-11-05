@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="bn" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <title>LegalAI Bangladesh — আইনি প্রশ্ন, রায় ও আইন অনুসন্ধান</title>
+    <meta
+      name="description"
+      content="বাংলাদেশের হাইকোর্ট বিভাগের রায় ও প্রচলিত আইন থেকে সূত্রসহ আইনি তথ্য জানুন। বাংলা বা ইংরেজিতে প্রশ্ন করুন, মামলা ও আইন খুঁজুন, দলিলের খসড়া তৈরি করুন।"
+    />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0A0B0D" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FAF8F3" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icons/icon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="LegalAI Bangladesh" />
+    <meta property="og:description" content="হাইকোর্ট বিভাগের রায় ও বাংলাদেশের আইন থেকে সূত্রসহ আইনি তথ্য।" />
+    <meta property="og:image" content="/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Runs before first paint, so the page never flashes the wrong theme.
+      (function () {
+        var saved = null;
+        try {
+          saved = localStorage.getItem("legalai.theme");
+        } catch (e) {}
+        var dark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+        var theme = saved === "light" || saved === "dark" ? saved : dark ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+    <style>
+      html {
+        background: #0a0b0d;
+      }
+      html[data-theme="light"] {
+        background: #faf8f3;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>এই অ্যাপটি চালাতে JavaScript চালু করুন।</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

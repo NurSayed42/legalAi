@@ -17,6 +17,32 @@ The laws collection is not exactly the original: on 2026-10-27 `clean_metadata.p
 
 **D-006 — Test/eval layout.** The earlier `eval/` folder was split into `evals/` (runner, reports) and `tests/` (unit + live regression tests) to match SPEC §3.
 
+## Frontend
+
+**D-213 — README screenshots.** The README carries a product tour because there's no public demo. Real answers can show judgement file names in `case_no`, and those can name real people, so two screenshots were cropped to remove case cards (D-211). The rows were removed rather than blurred, the files were rebuilt from pixels so no metadata carries over, and every image was read by eye and by OCR. Search results aren't shown, because they display judgement text. Case numbers with one-line AI summaries remain in one screenshot, since they identify no one. The generated-document screenshot stops before raw Markdown tables, a known rendering gap listed in the README's limitations.
+
+**D-212 — A rebuilt UI, with some of the brief changed so it can't mislead.** The user asked for a Vite, React and Tailwind rebuild ("Ink & Brass") with frozen API payloads, ahead of SPEC order: SPEC puts UI work in Phase 7, against `legal_ui_v2.html`, and Phase 2 human review is still open. The user approved these changes to the brief on 2026-11-05, because the original versions would overstate what the data supports:
+
+- *No win-probability ring.* `win_rate_pct` is computed from at most `N_CASES_FINAL` (4) cases chosen for topic similarity, with unknown outcomes in the total, so a ring could read 0% from one case. The UI shows plain counts and a won/lost/other bar.
+- *No relevance percentage.* `/api/search` `score` is rank fusion times a recency weight, so a good match reads about 4%. The bar is scaled to the top result in its list, with no number.
+- *Generated-document laws are marked "যাচাই করুন".* `/api/generate-doc` retrieves them from the document type alone; a rent agreement cited the Foreign Exchange Regulation Act in testing.
+- *No fake progress.* The API doesn't stream. Stop only ends the browser's wait: the server finishes and still spends LLM tokens.
+- *One payload difference.* Failed turns are left out of `history`, along with their question. The old UI sent its own "❌" text to the model as an assistant message. All 10 payload scenarios with no failed turn are identical to the old UI (`frontend/qa/parity.mjs`).
+
+Checked against the evaluation copy's metadata, read-only:
+
+- *No Appellate Division filter.* All 8,615 judgement files in v1 are `HCD`. v3 has one `AD`, which looks like a labelling error.
+- *No "1950–2025".* It's hard-coded in `/api/stats`. Of the 7,558 dated files, 4,607 are from 2020 or later and 31 are before 1990; 1,057 have no year, and some years are extraction errors (2026, 2029). The UI says most judgements are from after 2010 (6,524 of 7,558).
+
+Other choices:
+
+- *Serving.* There's no static mount to update: `api_v3.py` returns JSON at `/` and the old page is opened as a file. To leave production alone, only `evals/serve_live.py` serves `frontend/dist`, with hashed assets cached for a year, `index.html` revalidated, and an SPA fallback that never hides a missing API route or asset. `--ui legacy` serves the old page, and `legal_ui_v2.html` stays as the rollback. How production serves the build is still undecided; `VITE_API_BASE` allows a separate host, since the API already allows any origin.
+- *QA outputs are local only (D-211).* Real screenshots and responses show judgement text and names, so `frontend/qa/before`, `after` and `reports` are gitignored. Only scripts, made-up fixtures and number-only summaries are committed.
+- *Guesses, kept in `frontend/src/lib/config.ts` (rule 9).* Timeouts (chat and predict 5 min, docs 3 min, search 1 min), a 2,000-character composer limit that isn't in the API contract, one retry only when no response arrived, and a "small sample" note below 10 cases.
+- *Version pins.* ESLint stays on 9 because `eslint-plugin-jsx-a11y` doesn't support 10, and TypeScript on 5.9 because `typescript-eslint` doesn't support 7.
+- *Fonts.* Noto Serif Bengali was added beyond the brief's list, because Fraunces has no Bangla glyphs and the hero headline is meant to be serif.
+- *Rule 8.* Frontend-only commits ran `tsc`, ESLint and the unit tests rather than `ruff` and `pytest`, since they can't affect Python. Commits touching Python ran both.
+
 ## Phase 2 — evaluation harness
 
 **D-211 — Judgement text and real names stay out of the public repo.** Before this branch was first published, a comparison of every file version against the corpus found verbatim judgement text in `human_review.csv` (up to 242 consecutive words), the reports, the qrels and `corrupted_bangla_handcheck.csv`. Real names were there too: at least 872 of the 8,615 judgement file names contain a person's name, some of them people accused in criminal cases, and the benchmark queries name parties. Name detection is only a heuristic, so whole folders were removed from the branch's history instead of trusting it file by file. `evals/golden/`, `evals/reports/` and `data_quality/` are now gitignored and local only. This overrides the SPEC's "report committed under `evals/reports/`". The costs: the benchmark can't be re-run from a fresh clone, tests needing these files skip when they're absent, and git no longer protects them, so only the hash test guards the frozen qrels and queries. With the labels missing, `evals/experiment_gate.py` reports not ready.

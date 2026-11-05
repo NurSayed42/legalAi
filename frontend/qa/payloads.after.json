@@ -1,0 +1,147 @@
+{
+  "note": "Request bodies from the new UI, captured with stubbed responses. Diffed against payloads.before.json.",
+  "scenarios": {
+    "chat_first_turn": [
+      {
+        "path": "/api/chat",
+        "body": {
+          "question": "চেক ডিজঅনার হলে কী করব?",
+          "history": [],
+          "filters": null
+        }
+      }
+    ],
+    "chat_second_turn_has_history": [
+      {
+        "path": "/api/chat",
+        "body": {
+          "question": "চেক ডিজঅনার হলে কী করব?",
+          "history": [],
+          "filters": null
+        }
+      },
+      {
+        "path": "/api/chat",
+        "body": {
+          "question": "নোটিশ কীভাবে পাঠাব?",
+          "history": [
+            {
+              "role": "user",
+              "content": "চেক ডিজঅনার হলে কী করব?"
+            },
+            {
+              "role": "assistant",
+              "content": "{\"short_answer\":\"চেক ডিজঅনার হলে প্রথমে ৩০ দিনের মধ্যে লিখিত নোটিশ দিন। নোটিশ পাওয়ার ৩০ দিনের মধ্যে অর্থ পরিশোধ না হলে পরের এক মাসের মধ্যে আদালতে অভিযোগ করতে পারবেন।\",\"summary\":\"চেক ডিজঅনার হলে প্রথমে ৩০ দিনের মধ্যে লিখিত নোটিশ দিন। নোটিশ পাওয়ার ৩০ দিনের মধ্যে অর্থ পরিশোধ না হলে পরের এক মাসের মধ্যে আদালতে অভিযোগ করতে পারবেন।\",\"applicable_laws\":[{\"act\":\"The Negotiable Instruments Act, 1881\",\"section\":\"Section 138 — Dishonour of cheque for insufficiency, etc. of funds in the account\",\"what_it_says\":\"পর্যাপ্ত অর্থ না থাকায় চেক ফেরত এলে তা অপরাধ হিসেবে গণ্য হতে পারে।\",\"how_it_applies\":\"নমুনা: আপনার চেক ফেরত আসার তারিখ থেকে নোটিশের সময় গোনা শুরু হবে।\",\"url\":\"http://bdlaws.minlaw.gov.bd/act-details-46.html\"},{\"act\":\"The Negotiable Instruments Act, 1881\",\"section\":\"Section 141 — Cognizance of offences\",\"what_it_says\":\"লিখিত অভিযোগের ভিত্তিতে আদালত এই অপরাধ আমলে নেয়, এবং অভিযোগ করার সময়সীমা নির্দিষ্ট।\",\"how_it_applies\":\"\",\"url\":\"http://bdlaws.minlaw.gov.bd/act-details-46.html\"}],\"relevant_cases\":[{\"case_no\":\"Criminal Revision No. 0000 of 2020\",\"year\":2020,\"division\":\"HCD\",\"holding\":\"নমুনা রায়: নোটিশ যথাসময়ে না দেওয়ায় অভিযোগটি গ্রহণযোগ্য হয়নি।\"},{\"case_no\":\"Criminal Appeal No. 0000 of 2018\",\"year\":2018,\"division\":\"HCD\",\"holding\":\"নমুনা রায়: চেকের বৈধ পাওনা প্রমাণের দায় নিয়ে আলোচনা।\"}],\"procedure\":{\"steps\":[\"১. ব্যাংকের ফেরতের স্লিপ সংগ্রহ করুন।\",\"২. ৩০ দিনের মধ্যে লিখিত নোটিশ পাঠান।\",\"৩. সময়মতো আদালতে অভিযোগ দায়ের করুন।\"],\"court\":\"যুগ্ম দায়রা জজ আদালত\",\"deadline\":\"নোটিশের সময়সীমা শেষ হওয়ার পর এক মাস\",\"cost\":\"আদালত ফি ও আইনজীবীর খরচ মামলাভেদে আলাদা\",\"penalties\":\"এক বছর পর্যন্ত কারাদণ্ড বা চেকের তিনগুণ পর্যন্ত জরিমানা, অথবা উভয়\",\"documents\":[\"মূল চেক\",\"ব্যাংকের ফেরতের স্লিপ\",\"নোটিশের কপি ও ডাকের রসিদ\"]},\"risks\":[\"সময়সীমা পার হলে অভিযোগ গ্রহণযোগ্য নাও হতে পারে।\",\"নোটিশের প্রমাণ না থাকলে মামলা দুর্বল হয়ে পড়ে।\"],\"when_to_see_lawyer\":\"নোটিশ পাঠানোর আগেই একজন আইনজীবীর সঙ্গে কথা বলুন, যাতে সময়সীমা ও ভাষা ঠিক থাকে।\",\"follow_up_options\":[{\"question\":\"চেকটি কবে ফেরত এসেছে?\",\"options\":[\"৩০ দিনের মধ্যে\",\"৩০ দিনের বেশি আগে\"]},{\"question\":\"আপনি কি নোটিশ পাঠিয়েছেন?\",\"options\":[\"হ্যাঁ\",\"না\"]}],\"follow_up_questions\":[],\"disclaimer\":\"এটি সাধারণ তথ্য, আইনি পরামর্শ নয়। আপনার বিষয়টি নিয়ে একজন আইনজীবীর সঙ্গে কথা বলুন।\"}"
+            }
+          ],
+          "filters": null
+        }
+      }
+    ],
+    "chat_with_filters": [
+      {
+        "path": "/api/chat",
+        "body": {
+          "question": "চেক ডিজঅনার হলে কী করব?",
+          "history": [],
+          "filters": {
+            "case_type": "writ_petition",
+            "division": "HCD",
+            "year_from": "2015"
+          }
+        }
+      }
+    ],
+    "chat_follow_up_option": [
+      {
+        "path": "/api/chat",
+        "body": {
+          "question": "চেক ডিজঅনার হলে কী করব?",
+          "history": [],
+          "filters": null
+        }
+      },
+      {
+        "path": "/api/chat",
+        "body": {
+          "question": "চেকটি কবে ফেরত এসেছে? ৩০ দিনের মধ্যে",
+          "history": [
+            {
+              "role": "user",
+              "content": "চেক ডিজঅনার হলে কী করব?"
+            },
+            {
+              "role": "assistant",
+              "content": "{\"short_answer\":\"চেক ডিজঅনার হলে প্রথমে ৩০ দিনের মধ্যে লিখিত নোটিশ দিন। নোটিশ পাওয়ার ৩০ দিনের মধ্যে অর্থ পরিশোধ না হলে পরের এক মাসের মধ্যে আদালতে অভিযোগ করতে পারবেন।\",\"summary\":\"চেক ডিজঅনার হলে প্রথমে ৩০ দিনের মধ্যে লিখিত নোটিশ দিন। নোটিশ পাওয়ার ৩০ দিনের মধ্যে অর্থ পরিশোধ না হলে পরের এক মাসের মধ্যে আদালতে অভিযোগ করতে পারবেন।\",\"applicable_laws\":[{\"act\":\"The Negotiable Instruments Act, 1881\",\"section\":\"Section 138 — Dishonour of cheque for insufficiency, etc. of funds in the account\",\"what_it_says\":\"পর্যাপ্ত অর্থ না থাকায় চেক ফেরত এলে তা অপরাধ হিসেবে গণ্য হতে পারে।\",\"how_it_applies\":\"নমুনা: আপনার চেক ফেরত আসার তারিখ থেকে নোটিশের সময় গোনা শুরু হবে।\",\"url\":\"http://bdlaws.minlaw.gov.bd/act-details-46.html\"},{\"act\":\"The Negotiable Instruments Act, 1881\",\"section\":\"Section 141 — Cognizance of offences\",\"what_it_says\":\"লিখিত অভিযোগের ভিত্তিতে আদালত এই অপরাধ আমলে নেয়, এবং অভিযোগ করার সময়সীমা নির্দিষ্ট।\",\"how_it_applies\":\"\",\"url\":\"http://bdlaws.minlaw.gov.bd/act-details-46.html\"}],\"relevant_cases\":[{\"case_no\":\"Criminal Revision No. 0000 of 2020\",\"year\":2020,\"division\":\"HCD\",\"holding\":\"নমুনা রায়: নোটিশ যথাসময়ে না দেওয়ায় অভিযোগটি গ্রহণযোগ্য হয়নি।\"},{\"case_no\":\"Criminal Appeal No. 0000 of 2018\",\"year\":2018,\"division\":\"HCD\",\"holding\":\"নমুনা রায়: চেকের বৈধ পাওনা প্রমাণের দায় নিয়ে আলোচনা।\"}],\"procedure\":{\"steps\":[\"১. ব্যাংকের ফেরতের স্লিপ সংগ্রহ করুন।\",\"২. ৩০ দিনের মধ্যে লিখিত নোটিশ পাঠান।\",\"৩. সময়মতো আদালতে অভিযোগ দায়ের করুন।\"],\"court\":\"যুগ্ম দায়রা জজ আদালত\",\"deadline\":\"নোটিশের সময়সীমা শেষ হওয়ার পর এক মাস\",\"cost\":\"আদালত ফি ও আইনজীবীর খরচ মামলাভেদে আলাদা\",\"penalties\":\"এক বছর পর্যন্ত কারাদণ্ড বা চেকের তিনগুণ পর্যন্ত জরিমানা, অথবা উভয়\",\"documents\":[\"মূল চেক\",\"ব্যাংকের ফেরতের স্লিপ\",\"নোটিশের কপি ও ডাকের রসিদ\"]},\"risks\":[\"সময়সীমা পার হলে অভিযোগ গ্রহণযোগ্য নাও হতে পারে।\",\"নোটিশের প্রমাণ না থাকলে মামলা দুর্বল হয়ে পড়ে।\"],\"when_to_see_lawyer\":\"নোটিশ পাঠানোর আগেই একজন আইনজীবীর সঙ্গে কথা বলুন, যাতে সময়সীমা ও ভাষা ঠিক থাকে।\",\"follow_up_options\":[{\"question\":\"চেকটি কবে ফেরত এসেছে?\",\"options\":[\"৩০ দিনের মধ্যে\",\"৩০ দিনের বেশি আগে\"]},{\"question\":\"আপনি কি নোটিশ পাঠিয়েছেন?\",\"options\":[\"হ্যাঁ\",\"না\"]}],\"follow_up_questions\":[],\"disclaimer\":\"এটি সাধারণ তথ্য, আইনি পরামর্শ নয়। আপনার বিষয়টি নিয়ে একজন আইনজীবীর সঙ্গে কথা বলুন।\"}"
+            }
+          ],
+          "filters": null
+        }
+      }
+    ],
+    "predict_auto_detect": [
+      {
+        "path": "/api/predict",
+        "body": {
+          "situation": "আমার ভাড়াটিয়া ছয় মাস ধরে ভাড়া দিচ্ছে না, আমি মামলা করতে চাই।",
+          "case_type": null
+        }
+      }
+    ],
+    "predict_with_case_type": [
+      {
+        "path": "/api/predict",
+        "body": {
+          "situation": "আমার ভাড়াটিয়া ছয় মাস ধরে ভাড়া দিচ্ছে না, আমি মামলা করতে চাই।",
+          "case_type": "writ_petition"
+        }
+      }
+    ],
+    "search_both_no_filters": [
+      {
+        "path": "/api/search",
+        "body": {
+          "query": "dishonour of cheque section 138",
+          "search_type": "both",
+          "n_results": 8,
+          "filters": null
+        }
+      }
+    ],
+    "search_cases_with_filters": [
+      {
+        "path": "/api/search",
+        "body": {
+          "query": "dishonour of cheque section 138",
+          "search_type": "cases",
+          "n_results": 8,
+          "filters": {
+            "case_type": "criminal_revision",
+            "year_from": 2015,
+            "outcome": "rule_absolute"
+          }
+        }
+      }
+    ],
+    "search_laws_only": [
+      {
+        "path": "/api/search",
+        "body": {
+          "query": "dishonour of cheque section 138",
+          "search_type": "laws",
+          "n_results": 8,
+          "filters": null
+        }
+      }
+    ],
+    "docs_rent": [
+      {
+        "path": "/api/generate-doc",
+        "body": {
+          "doc_type": "rent",
+          "details": "Landlord: Test Person A, Dhaka. Tenant: Test Person B. Monthly rent 10,000 taka, for 12 months."
+        }
+      }
+    ]
+  }
+}

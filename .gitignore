@@ -70,3 +70,10 @@ data_quality/
 
 # Local review page, generated from the review sheet
 evals/review/
+
+# Frontend dependencies, and QA outputs that can show judgement text or real names (D-212)
+frontend/node_modules/
+frontend/qa/before/
+frontend/qa/after/
+frontend/qa/reports/
+frontend/qa/index.html
