@@ -34,20 +34,20 @@ This project builds a legal research assistant that treats *trustworthiness* as 
 
 **Text quality:** all 8,615 PDFs were re-extracted with a cascade (`ingestion/pdf_extract.py`: PyMuPDF → pdfplumber → Tesseract `ben+eng`), turning Bangla that `PyPDF2` read as mojibake (`q¡C−L¡VÑ` = "হাইকোর্ট") into real text. 59.7% of pages come from the text layer and 40.3% needed some OCR. The full report is [`data_quality/phase1_data_quality.md`](data_quality/phase1_data_quality.md).
 
-| Audit bucket | v1 (`PyPDF2`) | v2 (cascade) | v2, strict rules |
-|---|---|---|---|
-| good | 43.8% | 80.7% | 76.5% |
-| suspect | 23.2% | 19.1% | 23.0% |
-| broken | 33.0% | 0.2% | 0.5% |
+| Audit bucket | v1 (`PyPDF2`) | v2 (cascade) | v2, strict rules | v3, strict rules |
+|---|---|---|---|---|
+| good | 43.8% | 80.7% | 76.5% | 80.1% |
+| suspect | 23.2% | 19.1% | 23.0% | 19.7% |
+| broken | 33.0% | 0.2% | 0.5% | 0.2% |
 
-The strict rules add lost OCR lines and corrupted Bangla. v1 wasn't measured on them.
+The strict rules add lost OCR lines and corrupted Bangla. v1 wasn't measured on them. v3 re-OCRs 453 files with fixed settings and copies the other 8,162 from v2. On the pages v2 OCRed, lines kept rose from 93.25% to 99.31%, and Death Reference 58/2013 part 2 from 84.29% to 99.97%.
 
-Indexes: `bangladesh_judgements` (v1, 45,571 chunks, used by the API) and `bangladesh_judgements_v2` (42,762 chunks, not used by the API yet).
+Indexes: `bangladesh_judgements` (v1, 45,571 chunks, used by the API), `bangladesh_judgements_v2` (42,762 chunks) and `bangladesh_judgements_v3` (34,217 chunks). Neither v2 nor v3 is used by the API yet. Full results are in [`data_quality/phase1_data_quality.md`](data_quality/phase1_data_quality.md).
 
 **Known data gaps:**
-- **OCR dropped text lines in v2:** Death Reference 58/2013 part 2 keeps 84.3% of its lines, and 253 files are below 95%. The fix is in the code, but those files haven't been re-extracted.
-- **One case dominates:** Death Reference 58/2013 is 21% of v2's chunks and swamps Bangla vector search. A per-document cap is needed before the API moves to v2.
-- **Corrupted Bangla text layers** (`ǯদওয়ানী আদালেত ɛিতকার`) remain unreadable in v2 in 197 files (540 pages). The audit now detects them, and the extractor sends them to OCR.
+- **Bangla search relevance is poor:** in vector search on v3, only 10 of 100 top results contain the query's key term, against 34 of 50 in English. BM25 and the reranker haven't been tested on v3.
+- **One case is capped in v3:** Death Reference 58/2013 no longer swamps Bangla search (the most results one case takes fell from 10 of 10 to 3), but 96% of its chunks aren't indexed and 2 of 6 queries about it no longer find it. Its full text is in `text_v3/`.
+- **OCR isn't perfect:** Latin junk on legacy-font pages is unchanged (`মূল OTR`), and 47 files are still below 95% line retention. The 8,162 files copied from v2 weren't re-OCRed.
 - 133 extra files have text identical to another file, and 10 PDFs contain each page 2–3 times.
 - PDFs with no text layer at all were dropped by `extract_text.py` and are still missing from the corpus.
 - Not in the scraped laws corpus: NI Act s.138A, the Bangladesh Labour Act 2006, the Premises Rent Control Act 1991.
