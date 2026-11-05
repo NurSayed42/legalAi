@@ -1,0 +1,7 @@
+dist
+node_modules
+qa/before
+qa/after
+qa/reports
+qa/index.html
+package-lock.json
