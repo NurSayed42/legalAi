@@ -69,3 +69,15 @@ def test_real_death_ref_filenames_are_grouped():
 def test_configured_cap_is_above_the_next_largest_case():
     """সীমাটা Death Ref 58 এর জন্য; পরের বড় মামলা 354 chunk (v2)। এর নিচে নামালে সাধারণ judgement ও কাটা পড়বে।"""
     assert CAP_CONFIG["max_chunks_per_case"] > 354
+
+
+def test_retrieval_score_counts_terms_and_identical_texts():
+    from evals.retrieval_smoke import QUERIES_BN, QUERIES_EN, QUERY_TERMS, score_results
+
+    assert set(QUERY_TERMS) == set(QUERIES_BN + QUERIES_EN)
+    docs = ["BAIL was refused", "BAIL  was refused", "the suit was decreed", "জামিন মঞ্জুর"]
+    row = score_results(docs, ["a.pdf", "b.pdf", "c.pdf", "d.pdf"], ["bail", "জামিন"])
+    assert row["term_hits"] == 3
+    assert row["distinct_documents"] == 4
+    assert row["distinct_texts"] == 3
+    assert score_results(docs, ["a.pdf"] * 4)["term_hits"] == 0
